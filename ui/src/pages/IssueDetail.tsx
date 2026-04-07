@@ -77,6 +77,7 @@ import {
   type ActivityEvent,
   type Agent,
   type FeedbackVote,
+  type FeedbackVoteValue,
   type Issue,
   type IssueAttachment,
   type IssueComment,
@@ -1017,6 +1018,20 @@ export function IssueDetail() {
     [addComment, addCommentAndReassign],
   );
 
+  const handleCommentVote = useCallback(
+    async (commentId: string, vote: FeedbackVoteValue, options?: { reason?: string; allowSharing?: boolean }) => {
+      await feedbackVoteMutation.mutateAsync({
+        targetType: "issue_comment",
+        targetId: commentId,
+        vote,
+        reason: options?.reason,
+        allowSharing: options?.allowSharing,
+        sharingPreferenceAtSubmit: feedbackDataSharingPreference,
+      });
+    },
+    [feedbackVoteMutation, feedbackDataSharingPreference],
+  );
+
   useEffect(() => {
     const titleLabel = issue?.title ?? issueId ?? "Issue";
     setBreadcrumbs([
@@ -1595,16 +1610,7 @@ export function IssueDetail() {
             onInterruptQueued={handleInterruptQueued}
             interruptingQueuedRunId={interruptQueuedComment.isPending ? runningIssueRun?.id ?? null : null}
             composerDisabledReason={commentComposerDisabledReason}
-            onVote={async (commentId, vote, options) => {
-              await feedbackVoteMutation.mutateAsync({
-                targetType: "issue_comment",
-                targetId: commentId,
-                vote,
-                reason: options?.reason,
-                allowSharing: options?.allowSharing,
-                sharingPreferenceAtSubmit: feedbackDataSharingPreference,
-              });
-            }}
+            onVote={handleCommentVote}
             onAdd={handleCommentAdd}
             imageUploadHandler={handleCommentImageUpload}
             onAttachImage={handleCommentAttachImage}

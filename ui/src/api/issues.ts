@@ -1,5 +1,6 @@
 import type {
   Approval,
+  CompanyDeliverablesResponse,
   DocumentRevision,
   FeedbackTargetType,
   FeedbackTrace,
@@ -165,6 +166,8 @@ export const issuesApi = {
   unlinkApproval: (id: string, approvalId: string) =>
     api.delete<{ ok: true }>(`/issues/${id}/approvals/${approvalId}`),
   getDeliverables: (id: string) => api.get<IssueDeliverablesResponse>(`/issues/${id}/deliverables`),
+  listCompanyDeliverables: (companyId: string) =>
+    api.get<CompanyDeliverablesResponse>(`/companies/${companyId}/deliverables`),
   listCompanyWorkProducts: (
     companyId: string,
     filters?: {

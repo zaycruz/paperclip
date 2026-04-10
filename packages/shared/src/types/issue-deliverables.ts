@@ -80,3 +80,28 @@ export interface IssueDeliverablesResponse {
   documents: IssueDeliverableItem[];
   files: IssueDeliverableItem[];
 }
+
+export interface CompanyDeliverableItem extends IssueDeliverableItem {
+  issueId: string;
+  issueIdentifier: string | null;
+  issueTitle: string;
+  issueStatus: string;
+  projectId: string | null;
+}
+
+export interface CompanyDeliverablesSummary {
+  totalCount: number;
+  issueCount: number;
+  primaryCount: number;
+  previewCount: number;
+  pullRequestCount: number;
+  branchCount: number;
+  commitCount: number;
+  documentCount: number;
+  fileCount: number;
+}
+
+export interface CompanyDeliverablesResponse {
+  items: CompanyDeliverableItem[];
+  summary: CompanyDeliverablesSummary;
+}

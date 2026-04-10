@@ -2506,6 +2506,30 @@ export function issueService(db: Db) {
         .where(eq(issueAttachments.issueId, issueId))
         .orderBy(desc(issueAttachments.createdAt)),
 
+    listAttachmentsForCompany: async (companyId: string) =>
+      db
+        .select({
+          id: issueAttachments.id,
+          companyId: issueAttachments.companyId,
+          issueId: issueAttachments.issueId,
+          issueCommentId: issueAttachments.issueCommentId,
+          assetId: issueAttachments.assetId,
+          provider: assets.provider,
+          objectKey: assets.objectKey,
+          contentType: assets.contentType,
+          byteSize: assets.byteSize,
+          sha256: assets.sha256,
+          originalFilename: assets.originalFilename,
+          createdByAgentId: assets.createdByAgentId,
+          createdByUserId: assets.createdByUserId,
+          createdAt: issueAttachments.createdAt,
+          updatedAt: issueAttachments.updatedAt,
+        })
+        .from(issueAttachments)
+        .innerJoin(assets, eq(issueAttachments.assetId, assets.id))
+        .where(eq(issueAttachments.companyId, companyId))
+        .orderBy(desc(issueAttachments.updatedAt)),
+
     getAttachmentById: async (id: string) =>
       db
         .select({

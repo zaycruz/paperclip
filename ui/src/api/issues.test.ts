@@ -37,4 +37,10 @@ describe("issuesApi.list", () => {
       "/companies/company-1/work-products?type=artifact&limit=24",
     );
   });
+
+  it("calls the company deliverables endpoint", async () => {
+    await issuesApi.listCompanyDeliverables("company-1");
+
+    expect(mockApi.get).toHaveBeenCalledWith("/companies/company-1/deliverables");
+  });
 });

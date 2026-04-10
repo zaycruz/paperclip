@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionWorkspace, IssueDocument, IssueWorkProduct } from "@paperclipai/shared";
-import { buildIssueDeliverables } from "../services/issue-deliverables.ts";
+import type {
+  CompanyDeliverableItem,
+  ExecutionWorkspace,
+  IssueDocument,
+  IssueWorkProduct,
+} from "@paperclipai/shared";
+import { buildCompanyDeliverables, buildIssueDeliverables } from "../services/issue-deliverables.ts";
 
 function createIssueDocument(overrides: Partial<IssueDocument> = {}): IssueDocument {
   return {
@@ -206,5 +211,90 @@ describe("buildIssueDeliverables", () => {
     expect(response.summary.fileCount).toBe(2);
     expect(response.workspace?.runtimeServiceCount).toBe(1);
     expect(response.workspace?.runtimeServiceHealth).toBe("healthy");
+  });
+});
+
+describe("buildCompanyDeliverables", () => {
+  it("returns documents, attachments, and work products in one company feed", () => {
+    const response = buildCompanyDeliverables({
+      issues: [
+        {
+          id: "issue-1",
+          identifier: "PAP-10",
+          title: "Write launch plan",
+          status: "in_progress",
+          projectId: "project-1",
+          description: "<plan>Legacy plan body</plan>",
+          createdAt: new Date("2026-04-01T09:00:00.000Z"),
+          updatedAt: new Date("2026-04-01T15:00:00.000Z"),
+        },
+        {
+          id: "issue-2",
+          identifier: "PAP-11",
+          title: "Ship preview",
+          status: "done",
+          projectId: "project-1",
+          description: null,
+          createdAt: new Date("2026-04-01T10:00:00.000Z"),
+          updatedAt: new Date("2026-04-01T16:00:00.000Z"),
+        },
+      ],
+      workProducts: [
+        createWorkProduct({
+          id: "preview-1",
+          issueId: "issue-2",
+          type: "preview_url",
+          title: "Preview deploy",
+          provider: "vercel",
+          url: "https://preview.example.com",
+          status: "active",
+          reviewState: "none",
+          healthStatus: "healthy",
+          updatedAt: new Date("2026-04-01T17:00:00.000Z"),
+        }),
+      ],
+      documents: [
+        createIssueDocument({
+          id: "doc-1",
+          issueId: "issue-1",
+          key: "brief",
+          title: "Launch brief",
+          body: "Narrative and milestones.",
+          updatedAt: new Date("2026-04-01T14:00:00.000Z"),
+        }),
+      ],
+      attachments: [
+        {
+          id: "attachment-1",
+          companyId: "company-1",
+          issueId: "issue-2",
+          issueCommentId: null,
+          assetId: "asset-1",
+          provider: "paperclip",
+          objectKey: "artifacts/mockup.png",
+          contentType: "image/png",
+          byteSize: 1024,
+          sha256: "abc",
+          originalFilename: "mockup.png",
+          createdByAgentId: null,
+          createdByUserId: "user-1",
+          createdAt: new Date("2026-04-01T16:30:00.000Z"),
+          updatedAt: new Date("2026-04-01T16:30:00.000Z"),
+        },
+      ],
+    });
+
+    expect(response.summary.totalCount).toBe(4);
+    expect(response.summary.documentCount).toBe(2);
+    expect(response.summary.fileCount).toBe(1);
+    expect(response.summary.previewCount).toBe(1);
+    expect(response.summary.issueCount).toBe(2);
+
+    const kinds = response.items.map((item) => item.kind);
+    expect(kinds).toEqual(["preview_url", "attachment", "document", "document"]);
+
+    const legacyPlan = response.items.find((item): item is CompanyDeliverableItem => item.id === "legacy-plan:issue-1");
+    expect(legacyPlan?.issueIdentifier).toBe("PAP-10");
+    expect(legacyPlan?.issueTitle).toBe("Write launch plan");
   });
 });

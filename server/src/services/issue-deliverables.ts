@@ -1,4 +1,6 @@
 import type {
+  CompanyDeliverableItem,
+  CompanyDeliverablesResponse,
   ExecutionWorkspace,
   IssueDeliverableItem,
   IssueDeliverablesResponse,
@@ -14,6 +16,10 @@ import { issueService } from "./issues.js";
 import { workProductService } from "./work-products.js";
 
 type AttachmentInput = Awaited<ReturnType<ReturnType<typeof issueService>["listAttachments"]>>[number];
+type CompanyIssueInput = Pick<
+  Awaited<ReturnType<ReturnType<typeof issueService>["list"]>>[number],
+  "id" | "identifier" | "title" | "status" | "projectId" | "description" | "createdAt" | "updatedAt"
+>;
 
 type IssueInput = {
   id: string;
@@ -23,6 +29,7 @@ type IssueInput = {
   createdAt: Date;
   updatedAt: Date;
 };
+type LegacyPlanIssueInput = Pick<IssueInput, "id" | "createdAt" | "updatedAt">;
 
 type BuildIssueDeliverablesInput = {
   issue: IssueInput;
@@ -30,6 +37,13 @@ type BuildIssueDeliverablesInput = {
   workProducts: IssueWorkProduct[];
   documents: IssueDocument[];
   legacyPlanDocument: LegacyPlanDocument | null;
+  attachments: AttachmentInput[];
+};
+
+type BuildCompanyDeliverablesInput = {
+  issues: CompanyIssueInput[];
+  workProducts: IssueWorkProduct[];
+  documents: IssueDocument[];
   attachments: AttachmentInput[];
 };
 
@@ -111,7 +125,7 @@ function toDocumentItem(document: IssueDocument): IssueDeliverableItem {
   };
 }
 
-function toLegacyPlanItem(issue: IssueInput, legacyPlanDocument: LegacyPlanDocument): IssueDeliverableItem {
+function toLegacyPlanItem(issue: LegacyPlanIssueInput, legacyPlanDocument: LegacyPlanDocument): IssueDeliverableItem {
   return {
     id: `legacy-plan:${issue.id}`,
     sourceType: "legacy_plan_document",
@@ -154,6 +168,20 @@ function toAttachmentItem(attachment: AttachmentInput): IssueDeliverableItem {
     revisionNumber: null,
     contentType: attachment.contentType,
     byteSize: attachment.byteSize,
+  };
+}
+
+function toCompanyDeliverableItem(
+  item: IssueDeliverableItem,
+  issue: CompanyIssueInput,
+): CompanyDeliverableItem {
+  return {
+    ...item,
+    issueId: issue.id,
+    issueIdentifier: issue.identifier ?? null,
+    issueTitle: issue.title,
+    issueStatus: issue.status,
+    projectId: issue.projectId,
   };
 }
 
@@ -299,6 +327,90 @@ export function buildIssueDeliverables(input: BuildIssueDeliverablesInput): Issu
   };
 }
 
+export function buildCompanyDeliverables(input: BuildCompanyDeliverablesInput): CompanyDeliverablesResponse {
+  const issueMap = new Map<string, CompanyIssueInput>();
+  for (const issue of input.issues) {
+    issueMap.set(issue.id, issue);
+  }
+
+  const explicitPlanIssueIds = new Set(
+    input.documents
+      .filter((document) => document.key === "plan")
+      .map((document) => document.issueId),
+  );
+
+  const items: CompanyDeliverableItem[] = [];
+  for (const product of input.workProducts) {
+    const issue = issueMap.get(product.issueId);
+    if (!issue) continue;
+    items.push(toCompanyDeliverableItem(toWorkProductItem(product), issue));
+  }
+
+  for (const document of input.documents) {
+    const issue = issueMap.get(document.issueId);
+    if (!issue) continue;
+    items.push(toCompanyDeliverableItem(toDocumentItem(document), issue));
+  }
+
+  for (const attachment of input.attachments) {
+    const issue = issueMap.get(attachment.issueId);
+    if (!issue) continue;
+    items.push(toCompanyDeliverableItem(toAttachmentItem(attachment), issue));
+  }
+
+  for (const issue of input.issues) {
+    if (explicitPlanIssueIds.has(issue.id)) continue;
+    const legacyPlanBody = extractLegacyPlanBody(issue.description);
+    if (!legacyPlanBody) continue;
+    items.push(
+      toCompanyDeliverableItem(
+        toLegacyPlanItem(issue, {
+          key: "plan",
+          body: legacyPlanBody,
+          source: "issue_description",
+        }),
+        issue,
+      ),
+    );
+  }
+
+  const sortedItems = [...items].sort(compareItemsByRecency);
+  const issueIds = new Set<string>();
+  let primaryCount = 0;
+  let previewCount = 0;
+  let pullRequestCount = 0;
+  let branchCount = 0;
+  let commitCount = 0;
+  let documentCount = 0;
+  let fileCount = 0;
+
+  for (const item of sortedItems) {
+    issueIds.add(item.issueId);
+    if (item.isPrimary) primaryCount += 1;
+    if (item.kind === "preview_url" || item.kind === "runtime_service") previewCount += 1;
+    else if (item.kind === "pull_request") pullRequestCount += 1;
+    else if (item.kind === "branch") branchCount += 1;
+    else if (item.kind === "commit") commitCount += 1;
+    else if (item.kind === "document") documentCount += 1;
+    else fileCount += 1;
+  }
+
+  return {
+    items: sortedItems,
+    summary: {
+      totalCount: sortedItems.length,
+      issueCount: issueIds.size,
+      primaryCount,
+      previewCount,
+      pullRequestCount,
+      branchCount,
+      commitCount,
+      documentCount,
+      fileCount,
+    },
+  };
+}
+
 export function issueDeliverableService(db: Db) {
   const issuesSvc = issueService(db);
   const workProductsSvc = workProductService(db);
@@ -306,6 +418,31 @@ export function issueDeliverableService(db: Db) {
   const executionWorkspacesSvc = executionWorkspaceService(db);
 
   return {
+    listForCompany: async (companyId: string) => {
+      const [issues, workProducts, documents, attachments] = await Promise.all([
+        issuesSvc.list(companyId),
+        workProductsSvc.listForCompany(companyId),
+        documentsSvc.listCompanyIssueDocuments(companyId).then((rows) => rows as IssueDocument[]),
+        issuesSvc.listAttachmentsForCompany(companyId),
+      ]);
+
+      return buildCompanyDeliverables({
+        issues: issues.map((issue) => ({
+          id: issue.id,
+          identifier: issue.identifier ?? null,
+          title: issue.title,
+          status: issue.status,
+          projectId: issue.projectId,
+          description: issue.description,
+          createdAt: issue.createdAt,
+          updatedAt: issue.updatedAt,
+        })),
+        workProducts,
+        documents,
+        attachments,
+      });
+    },
+
     getForIssue: async (issue: IssueInput) => {
       const legacyPlanBody = extractLegacyPlanBody(issue.description);
       const [workspace, workProducts, documents, attachments] = await Promise.all([

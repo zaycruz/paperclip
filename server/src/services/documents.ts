@@ -132,6 +132,16 @@ export function documentService(db: Db) {
       return filterSystemDocuments(rows, options.includeSystem ?? false).map((row) => mapIssueDocumentRow(row, true));
     },
 
+    listCompanyIssueDocuments: async (companyId: string) => {
+      const rows = await db
+        .select(issueDocumentSelect)
+        .from(issueDocuments)
+        .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+        .where(eq(issueDocuments.companyId, companyId))
+        .orderBy(desc(documents.updatedAt), asc(issueDocuments.key));
+      return rows.map((row) => mapIssueDocumentRow(row, true));
+    },
+
     getIssueDocumentByKey: async (issueId: string, rawKey: string) => {
       const key = normalizeDocumentKey(rawKey);
       const row = await db

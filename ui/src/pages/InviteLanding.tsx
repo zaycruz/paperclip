@@ -4,6 +4,7 @@ import { AGENT_ADAPTER_TYPES } from "@paperclipai/shared";
 import type { AgentAdapterType, JoinRequest } from "@paperclipai/shared";
 import { Button } from "@/components/ui/button";
 import { CompanyPatternIcon } from "@/components/CompanyPatternIcon";
+import { useCompany } from "@/context/CompanyContext";
 import { Link, useNavigate, useParams } from "@/lib/router";
 import { accessApi } from "../api/access";
 import { authApi } from "../api/auth";
@@ -104,9 +105,24 @@ function mapInviteAuthFeedback(
   };
 }
 
+function isBootstrapAcceptancePayload(payload: unknown) {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      "bootstrapAccepted" in (payload as Record<string, unknown>),
+  );
+}
+
+function isApprovedHumanJoinPayload(payload: unknown, showsAgentForm: boolean) {
+  if (!payload || typeof payload !== "object" || showsAgentForm) return false;
+  const status = (payload as { status?: unknown }).status;
+  return status === "approved";
+}
+
 export function InviteLandingPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { setSelectedCompanyId } = useCompany();
   const params = useParams();
   const token = (params.token ?? "").trim();
   const [authMode, setAuthMode] = useState<AuthMode>("sign_up");
@@ -215,8 +231,7 @@ export function InviteLandingPage() {
       clearPendingInviteToken(token);
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
-      const asBootstrap =
-        payload && typeof payload === "object" && "bootstrapAccepted" in (payload as Record<string, unknown>);
+      const asBootstrap = isBootstrapAcceptancePayload(payload);
       setResult({ kind: asBootstrap ? "bootstrap" : "join", payload });
     },
     onError: (err) => {
@@ -240,7 +255,35 @@ export function InviteLandingPage() {
       setAuthFeedback(null);
       rememberPendingInviteToken(token);
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
+      const companies = await queryClient.fetchQuery({
+        queryKey: queryKeys.companies.all,
+        queryFn: () => companiesApi.list(),
+        retry: false,
+      });
+
+      if (invite?.companyId && companies.some((company) => company.id === invite.companyId)) {
+        clearPendingInviteToken(token);
+        setSelectedCompanyId(invite.companyId, { source: "manual" });
+        navigate("/", { replace: true });
+        return;
+      }
+
+      let payload: unknown;
+      try {
+        payload = await acceptMutation.mutateAsync();
+      } catch {
+        return;
+      }
+
+      if (invite?.companyId && isApprovedHumanJoinPayload(payload, showsAgentForm)) {
+        setSelectedCompanyId(invite.companyId, { source: "manual" });
+        navigate("/", { replace: true });
+        return;
+      }
+
+      if (isBootstrapAcceptancePayload(payload)) {
+        navigate("/", { replace: true });
+      }
     },
     onError: (err) => {
       const nextFeedback = mapInviteAuthFeedback(err, authMode, email);

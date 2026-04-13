@@ -14,6 +14,7 @@ const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
 const healthGetMock = vi.hoisted(() => vi.fn());
 const listCompaniesMock = vi.hoisted(() => vi.fn());
+const setSelectedCompanyIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/access", () => ({
   accessApi: {
@@ -50,7 +51,7 @@ vi.mock("@/context/CompanyContext", () => ({
     selectionSource: "manual",
     loading: false,
     error: null,
-    setSelectedCompanyId: vi.fn(),
+    setSelectedCompanyId: setSelectedCompanyIdMock,
     reloadCompanies: vi.fn(),
     createCompany: vi.fn(),
   }),
@@ -109,6 +110,7 @@ describe("InviteLandingPage", () => {
     getSessionMock.mockResolvedValue(null);
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
+    setSelectedCompanyIdMock.mockReset();
   });
 
   afterEach(() => {
@@ -270,6 +272,145 @@ describe("InviteLandingPage", () => {
     expect(container.textContent).toContain(
       "That email and password did not match an existing Paperclip account. Check both fields, or create an account first if you are new here.",
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("auto-accepts the invite after account creation and redirects into the company", async () => {
+    acceptInviteMock.mockResolvedValue({
+      id: "join-1",
+      companyId: "company-1",
+      requestType: "human",
+      status: "approved",
+    });
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={["/invite/pcp_invite_test"]}>
+          <QueryClientProvider client={queryClient}>
+            <Routes>
+              <Route path="/invite/:token" element={<InviteLandingPage />} />
+            </Routes>
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    const inputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    expect(inputValueSetter).toBeTypeOf("function");
+
+    const nameInput = container.querySelector('input[name="name"]') as HTMLInputElement | null;
+    const emailInput = container.querySelector('input[name="email"]') as HTMLInputElement | null;
+    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement | null;
+    expect(nameInput).not.toBeNull();
+    expect(emailInput).not.toBeNull();
+    expect(passwordInput).not.toBeNull();
+
+    await act(async () => {
+      inputValueSetter!.call(nameInput, "Jane Example");
+      nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      inputValueSetter!.call(emailInput, "jane@example.com");
+      emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      inputValueSetter!.call(passwordInput, "supersecret");
+      passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const authForm = container.querySelector('[data-testid="invite-inline-auth"]') as HTMLFormElement | null;
+    expect(authForm).not.toBeNull();
+
+    await act(async () => {
+      authForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact();
+    await flushReact();
+    await flushReact();
+
+    expect(signUpEmailMock).toHaveBeenCalledWith({
+      name: "Jane Example",
+      email: "jane@example.com",
+      password: "supersecret",
+    });
+    expect(acceptInviteMock).toHaveBeenCalledWith("pcp_invite_test", { requestType: "human" });
+    expect(setSelectedCompanyIdMock).toHaveBeenCalledWith("company-1", { source: "manual" });
+    expect(localStorage.getItem("paperclip:pending-invite-token")).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("redirects straight to the company after sign-in when the user already has access", async () => {
+    listCompaniesMock.mockResolvedValue([{ id: "company-1", name: "Acme Robotics" }]);
+
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={["/invite/pcp_invite_test"]}>
+          <QueryClientProvider client={queryClient}>
+            <Routes>
+              <Route path="/invite/:token" element={<InviteLandingPage />} />
+            </Routes>
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushReact();
+    await flushReact();
+
+    const inputValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    expect(inputValueSetter).toBeTypeOf("function");
+
+    const existingAccountButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "I already have an account",
+    );
+    expect(existingAccountButton).not.toBeNull();
+
+    await act(async () => {
+      existingAccountButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushReact();
+
+    const emailInput = container.querySelector('input[name="email"]') as HTMLInputElement | null;
+    const passwordInput = container.querySelector('input[name="password"]') as HTMLInputElement | null;
+    expect(emailInput).not.toBeNull();
+    expect(passwordInput).not.toBeNull();
+
+    await act(async () => {
+      inputValueSetter!.call(emailInput, "jane@example.com");
+      emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      inputValueSetter!.call(passwordInput, "supersecret");
+      passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const authForm = container.querySelector('[data-testid="invite-inline-auth"]') as HTMLFormElement | null;
+    expect(authForm).not.toBeNull();
+
+    await act(async () => {
+      authForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact();
+    await flushReact();
+
+    expect(signInEmailMock).toHaveBeenCalledWith({
+      email: "jane@example.com",
+      password: "supersecret",
+    });
+    expect(acceptInviteMock).not.toHaveBeenCalled();
+    expect(setSelectedCompanyIdMock).toHaveBeenCalledWith("company-1", { source: "manual" });
+    expect(localStorage.getItem("paperclip:pending-invite-token")).toBeNull();
 
     await act(async () => {
       root.unmount();

@@ -38,6 +38,7 @@ import {
   mergeHeartbeatRunResultJson,
   summarizeHeartbeatRunResultJson,
 } from "./heartbeat-run-summary.js";
+import { logActivity } from "./activity-log.js";
 import {
   buildWorkspaceReadyComment,
   cleanupExecutionWorkspaceArtifacts,

@@ -12,357 +12,85 @@ description: >
 
 This skill covers the day-to-day workflows for developing and operating a local Paperclip instance. It assumes the repo lives at `~/workspace/paperclip` (or the current checkout) with `origin` pointing to `git@github.com:paperclipai/paperclip.git`.
 
-## Starting and Stopping the Server
+> **MANDATORY:** Before running any CLI command, building, testing, or managing worktrees, you MUST read `doc/DEVELOPING.md` in the Paperclip repo. It is the canonical reference for all `paperclipai` CLI commands, their options, build/test workflows, database operations, worktree management, and diagnostics. Do NOT guess at flags or options — read the doc first.
 
-### Quick start (recommended)
+## Quick Command Reference
 
-```bash
-npx paperclipai run
-```
+These are the most common commands. For full option tables and details, see `doc/DEVELOPING.md`.
 
-Runs onboarding (if first time), doctor checks, and then starts the Paperclip server. This is the single command that gets everything running.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-c, --config <path>` | Path to config file |
-| `-d, --data-dir <path>` | Paperclip data directory root (isolates state from `~/.paperclip`) |
-| `-i, --instance <id>` | Local instance id (default: `default`) |
-| `--bind <mode>` | Reachability preset: `loopback`, `lan`, or `tailnet` |
-| `--repair` / `--no-repair` | Attempt automatic repairs during doctor (default: true) |
-
-### Development mode (hot reload)
-
-```bash
-pnpm dev          # watches for changes and restarts
-pnpm dev:once     # single dev run without watch
-pnpm dev:server   # server only (no agent processes)
-pnpm dev:ui       # UI dev server only
-```
-
-### Stopping
-
-```bash
-pnpm dev:stop     # stop the dev service
-pnpm dev:list     # list running dev services
-```
+| Task | Command |
+|------|---------|
+| Start server (first time or normal) | `npx paperclipai run` |
+| Dev mode with hot reload | `pnpm dev` |
+| Stop dev server | `pnpm dev:stop` |
+| Build | `pnpm build` |
+| Type-check | `pnpm typecheck` |
+| Run tests | `pnpm test` |
+| Run migrations | `pnpm db:migrate` |
+| Regenerate Drizzle client | `pnpm db:generate` |
+| Back up database | `npx paperclipai db:backup` |
+| Health check | `npx paperclipai doctor --repair` |
+| Print env vars | `npx paperclipai env` |
+| Trigger agent heartbeat | `npx paperclipai heartbeat run --agent-id <id>` |
+| Install agent skills locally | `npx paperclipai agent local-cli <agent> --company-id <id>` |
 
 ## Pulling from Master
 
 ```bash
-cd ~/workspace/paperclip
-git fetch origin
-git pull origin master       # or merge/rebase as appropriate
-pnpm install                # pick up dependency changes
-pnpm build                  # rebuild all packages
+git fetch origin && git pull origin master
+pnpm install && pnpm build
 ```
 
-After pulling, if schema changes landed:
-
-```bash
-pnpm db:generate            # regenerate Drizzle client from schema
-pnpm db:migrate             # run pending migrations
-```
-
-## Building and Testing
-
-```bash
-pnpm build                  # full monorepo build
-pnpm typecheck              # type-check all packages
-pnpm test                   # run all tests (vitest)
-pnpm test:watch             # run tests in watch mode
-```
-
-## Database Operations
-
-### Migrations
-
-```bash
-pnpm db:generate            # generate Drizzle client from schema changes
-pnpm db:migrate             # apply pending migrations
-```
-
-### Backups
-
-```bash
-npx paperclipai db:backup
-```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-c, --config <path>` | Path to config file |
-| `-d, --data-dir <path>` | Paperclip data directory root |
-| `--dir <path>` | Backup output directory (overrides config) |
-| `--retention-days <days>` | Retention window for pruning old backups |
-| `--filename-prefix <prefix>` | Backup filename prefix (default: `paperclip`) |
-| `--json` | Print backup metadata as JSON |
-
-## Diagnostics
-
-```bash
-npx paperclipai doctor              # check setup health
-npx paperclipai doctor --repair     # check and auto-fix issues
-npx paperclipai env                 # print current environment variables
-```
-
-## Agent Operations (Local)
-
-### Trigger a heartbeat
-
-```bash
-npx paperclipai heartbeat run --agent-id <agent-id>
-```
-
-### Install skills and get agent env vars
-
-```bash
-npx paperclipai agent local-cli <agent-id-or-shortname> --company-id <company-id>
-```
-
-Installs Paperclip skills for Claude/Codex and prints shell exports for that agent identity.
-
-### List agents
-
-```bash
-npx paperclipai agent list --company-id <company-id>
-```
-
----
+If schema changes landed, also run `pnpm db:generate && pnpm db:migrate`.
 
 ## Worktrees
 
-Paperclip worktrees combine git worktrees with isolated Paperclip instances. Each worktree gets its own database, server port, and full Paperclip environment seeded from the primary instance.
+Paperclip worktrees combine git worktrees with isolated Paperclip instances — each gets its own database, server port, and environment seeded from the primary instance.
+
+> **MANDATORY:** Before creating or managing worktrees, you MUST read the "Worktree-local Instances" and "Worktree CLI Reference" sections in `doc/DEVELOPING.md`. That is the canonical reference for all worktree commands, their options, seed modes, and environment variables.
 
 ### When to Use Worktrees
 
 - Starting a feature branch that needs its own Paperclip environment
 - Running parallel agent work without cross-contaminating the primary instance
 - Testing Paperclip changes in isolation before merging
-- Cleaning up after a completed branch
 
-### Commands
+### Command Overview
 
-All commands use `npx paperclipai`. The CLI has two tiers:
+The CLI has two tiers (see `doc/DEVELOPING.md` for full option tables):
 
-1. **Top-level shortcuts** (`worktree:make`, `worktree:list`, `worktree:cleanup`, `worktree:merge-history`) -- end-to-end lifecycle commands
-2. **Subcommands** (`worktree init`, `worktree env`, `worktree reseed`, `worktree repair`) -- lower-level instance management within an existing worktree
+| Command | Purpose |
+|---------|---------|
+| `worktree:make <name>` | Create worktree + isolated instance in one step |
+| `worktree:list` | List worktrees and their Paperclip status |
+| `worktree:merge-history` | Preview/import issue history between worktrees |
+| `worktree:cleanup <name>` | Remove worktree, branch, and instance data |
+| `worktree init` | Bootstrap instance inside existing worktree |
+| `worktree env` | Print shell exports for worktree instance |
+| `worktree reseed` | Refresh worktree DB from another instance |
+| `worktree repair` | Fix broken/missing worktree instance metadata |
 
----
-
-### Create a Worktree
-
-```bash
-npx paperclipai worktree:make <name>
-```
-
-Creates `~/paperclip-<name>` as a git worktree with a new branch, then bootstraps an isolated Paperclip instance inside it. The name is auto-prefixed with `paperclip-` if needed.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--start-point <ref>` | Remote ref to base the new branch on (env: `PAPERCLIP_WORKTREE_START_POINT`) |
-| `--instance <id>` | Explicit isolated instance id |
-| `--home <path>` | Home root for worktree instances (env: `PAPERCLIP_WORKTREES_DIR`, default: `~/.paperclip-worktrees`) |
-| `--from-config <path>` | Source config.json to seed from |
-| `--from-data-dir <path>` | Source `PAPERCLIP_HOME` used when deriving the source config |
-| `--from-instance <id>` | Source instance id (default: `default`) |
-| `--server-port <port>` | Preferred server port |
-| `--db-port <port>` | Preferred embedded Postgres port |
-| `--seed-mode <mode>` | `minimal` or `full` (default: `minimal`) |
-| `--no-seed` | Skip database seeding from the source instance |
-| `--force` | Replace existing repo-local config and isolated instance data |
-
-**Example -- start a feature worktree based on main:**
-
-```bash
-npx paperclipai worktree:make auth-refactor --start-point origin/main
-```
-
----
-
-### List Worktrees
-
-```bash
-npx paperclipai worktree:list
-```
-
-Lists all git worktrees visible from the current repo and indicates which ones have a Paperclip instance configured.
-
-| Flag | Description |
-|------|-------------|
-| `--json` | Print JSON output instead of text |
-
----
-
-### Initialize a Worktree Instance (Low-Level)
-
-```bash
-npx paperclipai worktree init
-```
-
-Run this inside an existing git worktree to create repo-local config/env and bootstrap an isolated Paperclip instance. This is the lower-level equivalent of what `worktree:make` does automatically.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--name <name>` | Display name used to derive the instance id |
-| `--instance <id>` | Explicit isolated instance id |
-| `--home <path>` | Home root (env: `PAPERCLIP_WORKTREES_DIR`, default: `~/.paperclip-worktrees`) |
-| `--from-config <path>` | Source config.json to seed from |
-| `--from-data-dir <path>` | Source `PAPERCLIP_HOME` for deriving config |
-| `--from-instance <id>` | Source instance id (default: `default`) |
-| `--server-port <port>` | Preferred server port |
-| `--db-port <port>` | Preferred embedded Postgres port |
-| `--seed-mode <mode>` | `minimal` or `full` (default: `minimal`) |
-| `--no-seed` | Skip database seeding |
-| `--force` | Replace existing config and instance data |
-
----
-
-### Print Worktree Environment
-
-```bash
-npx paperclipai worktree env
-```
-
-Prints shell exports (`PAPERCLIP_API_URL`, `PAPERCLIP_HOME`, etc.) for the current worktree-local instance.
-
-| Flag | Description |
-|------|-------------|
-| `-c, --config <path>` | Path to config file |
-| `--json` | Print JSON instead of shell exports |
-
-**Example -- source the environment in your shell:**
-
-```bash
-eval "$(npx paperclipai worktree env)"
-```
-
----
-
-### Reseed a Worktree
-
-```bash
-npx paperclipai worktree reseed
-```
-
-Re-seeds an existing worktree-local instance from another Paperclip instance. Use this to refresh a stale worktree with current data.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--from <worktree>` | Source worktree path, directory name, branch name, or `current` |
-| `--to <worktree>` | Target worktree (defaults to `current`) |
-| `--from-config <path>` | Source config.json |
-| `--from-data-dir <path>` | Source `PAPERCLIP_HOME` |
-| `--from-instance <id>` | Source instance id |
-| `--seed-mode <mode>` | `minimal` or `full` (default: `full`) |
-| `--yes` | Skip the destructive confirmation prompt |
-| `--allow-live-target` | Override the guard requiring the target DB to be stopped |
-
-**Important:** Stop the target worktree's database before reseeding unless using `--allow-live-target`.
-
----
-
-### Repair a Worktree Instance
-
-```bash
-npx paperclipai worktree repair
-```
-
-Creates or repairs a linked worktree-local Paperclip instance without touching the primary checkout.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--branch <name>` | Branch/worktree selector to repair |
-| `--home <path>` | Home root (env: `PAPERCLIP_WORKTREES_DIR`, default: `~/.paperclip-worktrees`) |
-| `--from-config <path>` | Source config.json |
-| `--from-data-dir <path>` | Source `PAPERCLIP_HOME` |
-| `--from-instance <id>` | Source instance id (default: `default`) |
-| `--seed-mode <mode>` | `minimal` or `full` (default: `minimal`) |
-| `--no-seed` | Repair metadata only, skip reseeding |
-| `--allow-live-target` | Override the stopped-DB guard |
-
----
-
-### Merge Issue History Between Worktrees
-
-```bash
-npx paperclipai worktree:merge-history [source]
-```
-
-Previews or imports issue and comment history from one worktree's Paperclip instance into another.
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--from <worktree>` | Source worktree path, directory name, branch name, or `current` |
-| `--to <worktree>` | Target worktree (defaults to `current`) |
-| `--company <id-or-prefix>` | Shared company id or issue prefix |
-| `--scope <items>` | Comma-separated: `issues`, `comments` (default: `issues,comments`) |
-| `--apply` | Apply the import after preview |
-| `--dry` | Preview only |
-| `--yes` | Skip interactive confirmation |
-
----
-
-### Clean Up a Worktree
-
-```bash
-npx paperclipai worktree:cleanup <name>
-```
-
-Removes a worktree, its git branch, and its isolated Paperclip instance data. The name is auto-prefixed with `paperclip-` if needed.
-
-| Flag | Description |
-|------|-------------|
-| `--instance <id>` | Explicit instance id (if different from the worktree name) |
-| `--home <path>` | Home root (env: `PAPERCLIP_WORKTREES_DIR`, default: `~/.paperclip-worktrees`) |
-| `--force` | Bypass safety checks (uncommitted changes, unique commits) |
-
-**Safety:** Without `--force`, the command checks for uncommitted changes and unique (unmerged) commits before removing. Always merge or push important work before cleanup.
-
----
-
-### Typical Worktree Workflow
+### Typical Workflow
 
 ```bash
 # 1. Create a worktree for a feature
 npx paperclipai worktree:make my-feature --start-point origin/main
 
-# 2. Move into it
+# 2. Move into it and source the environment
 cd ~/paperclip-my-feature
-
-# 3. Source the Paperclip environment
 eval "$(npx paperclipai worktree env)"
 
-# 4. Start the isolated Paperclip server
+# 3. Start the isolated Paperclip server
 npx paperclipai run
 
-# 5. Do your work -- agents use the isolated instance
+# 4. Do your work
 
-# 6. When done, merge history back if needed
+# 5. When done, merge history back if needed
 npx paperclipai worktree:merge-history --from paperclip-my-feature --to current --apply
 
-# 7. Clean up
+# 6. Clean up
 npx paperclipai worktree:cleanup my-feature
 ```
-
-## Key Concepts
-
-- **Instance isolation:** Each worktree gets its own database, server port, and config. Agents in one worktree don't interfere with another.
-- **Seeding:** New worktrees are seeded from an existing instance. `minimal` copies config (company, agents, skills). `full` copies everything including issues.
-- **Home directory:** Worktree instance data lives under `~/.paperclip-worktrees/` by default (configurable via `PAPERCLIP_WORKTREES_DIR`).
-- **History merging:** Issue and comment history can be selectively merged between worktrees before cleanup.
 
 ## Pull Requests
 

@@ -148,9 +148,26 @@ export function ProjectWorkspaceSummaryCard({
             {summary.branchName ? (
               <div className="flex items-start gap-2">
                 <GitBranch className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Branch</div>
-                  <div className="break-all font-mono text-xs text-foreground">{summary.branchName}</div>
+                  <div className="flex items-start gap-2">
+                    <CopyText
+                      text={summary.branchName}
+                      containerClassName="min-w-0"
+                      className="min-w-0 break-all text-left font-mono text-xs text-foreground"
+                      copiedLabel="Branch copied"
+                    >
+                      {summary.branchName}
+                    </CopyText>
+                    <CopyText
+                      text={summary.branchName}
+                      ariaLabel="Copy branch"
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                      copiedLabel="Branch copied"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </CopyText>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -161,10 +178,21 @@ export function ProjectWorkspaceSummaryCard({
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Path</div>
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 break-all font-mono text-xs text-foreground" title={summary.cwd}>
+                    <CopyText
+                      text={summary.cwd}
+                      title={summary.cwd}
+                      containerClassName="min-w-0"
+                      className="min-w-0 break-all text-left font-mono text-xs text-foreground"
+                      copiedLabel="Path copied"
+                    >
                       {truncatePath(summary.cwd)}
-                    </span>
-                    <CopyText text={summary.cwd} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground" copiedLabel="Path copied">
+                    </CopyText>
+                    <CopyText
+                      text={summary.cwd}
+                      ariaLabel="Copy path"
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                      copiedLabel="Path copied"
+                    >
                       <Copy className="h-3.5 w-3.5" />
                     </CopyText>
                   </div>

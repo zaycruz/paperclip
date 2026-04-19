@@ -30,7 +30,7 @@ function GlobalToolbarPlugins({ context }: { context: GlobalToolbarContext }) {
   );
 }
 
-const BOARD_ROOM_ROUTE_SEGMENT = "board-chat";
+const CONFERENCE_ROOM_ROUTE_SEGMENT = "board-chat";
 
 export function BreadcrumbBar() {
   const { breadcrumbs } = useBreadcrumbs();
@@ -39,12 +39,12 @@ export function BreadcrumbBar() {
   const { selectedCompanyId, selectedCompany } = useCompany();
 
   const displayBreadcrumbs = useMemo(() => {
-    const onBoardRoom = location.pathname
+    const onConferenceRoom = location.pathname
       .split("/")
       .filter(Boolean)
-      .includes(BOARD_ROOM_ROUTE_SEGMENT);
-    if (!onBoardRoom || breadcrumbs.length !== 1) return breadcrumbs;
-    return [{ ...breadcrumbs[0], label: "Board Room" }];
+      .includes(CONFERENCE_ROOM_ROUTE_SEGMENT);
+    if (!onConferenceRoom || breadcrumbs.length !== 1) return breadcrumbs;
+    return [{ ...breadcrumbs[0], label: "Conference Room" }];
   }, [breadcrumbs, location.pathname]);
 
   const globalToolbarSlotContext = useMemo(

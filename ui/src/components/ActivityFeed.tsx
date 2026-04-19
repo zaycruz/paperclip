@@ -1,15 +1,13 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ActivityEvent, Agent, Issue } from "@paperclipai/shared";
+import type { ActivityEvent, Agent } from "@paperclipai/shared";
 import { activityApi } from "../api/activity";
 import { agentsApi } from "../api/agents";
 import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
 import { useCompany } from "../context/CompanyContext";
-import { ActivityRow } from "./ActivityRow";
 import { FeedCard } from "./FeedCard";
 import { cn } from "../lib/utils";
-import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,7 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ListFilter, Layers, ChevronDown, ChevronRight, Loader2, User, Settings } from "lucide-react";
+import { ListFilter, Layers, ChevronDown, ChevronRight, User, Settings } from "lucide-react";
 import { AgentIcon } from "./AgentIconPicker";
 import { timeAgo } from "../lib/timeAgo";
 
@@ -243,10 +241,12 @@ function CollapsedFeedGroup({
   group,
   agentMap,
   entityNameMap,
+  entityTitleMap,
 }: {
   group: CollapsedGroup;
   agentMap: Map<string, Agent>;
   entityNameMap: Map<string, string>;
+  entityTitleMap: Map<string, string>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const actor = group.latestEvent.actorType === "agent"
@@ -258,57 +258,45 @@ function CollapsedFeedGroup({
       : "Unknown");
   const entityName = entityNameMap.get(`${group.entityType}:${group.entityId}`);
 
-  const link = group.entityType === "issue"
-    ? `/issues/${entityName ?? group.entityId}`
-    : null;
-
   return (
-    <div className="text-xs">
+    <div>
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center gap-2 px-4 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+        className={cn(
+          "mx-3 my-1.5 flex w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-left text-xs transition-[background-color,border-color,transform] duration-150",
+          "cursor-pointer hover:bg-accent hover:border-muted-foreground/30 hover:-translate-y-px",
+        )}
       >
         {expanded
           ? <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
           : <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
         }
-        <span className="flex-1 min-w-0 truncate">
-          {group.latestEvent.actorType === "agent"
-            ? <AgentIcon icon={actor?.icon ?? null} className="inline-block h-3.5 w-3.5 text-muted-foreground align-text-bottom" />
-            : group.latestEvent.actorType === "user"
-              ? <User className="inline-block h-3.5 w-3.5 text-muted-foreground align-text-bottom" />
-              : <Settings className="inline-block h-3.5 w-3.5 text-muted-foreground align-text-bottom" />
-          }
-          <span className="ml-1 font-medium">{actorName}</span>
-          <span className="ml-1">
-            {group.events.length} updates to{" "}
-          </span>
-          {link ? (
-            <Link
-              to={link}
-              className="font-medium hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {entityName ?? group.entityId}
-            </Link>
-          ) : (
-            <span className="font-medium">{entityName ?? group.entityId}</span>
-          )}
+        {group.latestEvent.actorType === "agent"
+          ? <AgentIcon icon={actor?.icon ?? null} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          : group.latestEvent.actorType === "user"
+            ? <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            : <Settings className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        }
+        <span className="flex-1 min-w-0 truncate text-muted-foreground">
+          <span className="font-medium text-foreground">{actorName}</span>
+          <span className="ml-1">made {group.events.length} updates to</span>
+          <span className="ml-1">{entityName ?? group.entityId}</span>
         </span>
-        <span className="text-xs text-muted-foreground shrink-0">
+        <span className="font-mono text-muted-foreground shrink-0">
           {timeAgo(group.latestEvent.createdAt)}
         </span>
       </button>
       {expanded && (
-        <div className="ml-5 border-l border-border/50">
+        <div className="ml-8">
           {group.events.map((evt) => (
-            <ActivityRow
+            <FeedCard
               key={evt.id}
               event={evt}
               agentMap={agentMap}
               entityNameMap={entityNameMap}
-              className="text-xs py-1.5 pl-3"
+              entityTitleMap={entityTitleMap}
+              tier={2}
             />
           ))}
         </div>
@@ -497,6 +485,7 @@ export function ActivityFeed({ className }: ActivityFeedProps) {
               group={item}
               agentMap={agentMap}
               entityNameMap={entityNameMap}
+              entityTitleMap={entityTitleMap}
             />
           </div>
         </div>
@@ -531,13 +520,14 @@ export function ActivityFeed({ className }: ActivityFeedProps) {
       <div key={evt.id}>
         {separator}
         <div className={animClass || undefined}>
-          <ActivityRow
+          <FeedCard
             event={evt}
             agentMap={agentMap}
             entityNameMap={entityNameMap}
             entityTitleMap={entityTitleMap}
-            className="text-xs"
+            entityStatusMap={entityStatusMap}
             isActive={isActiveHeartbeat}
+            tier={2}
           />
         </div>
       </div>

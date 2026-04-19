@@ -49,7 +49,7 @@ export function BoardChat() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Board Room" }]);
+    setBreadcrumbs([{ label: "Conference Room" }]);
   }, [setBreadcrumbs]);
 
   const splitContainerRef = useRef<HTMLDivElement>(null);
@@ -132,6 +132,8 @@ export function BoardChat() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const hasRestoredScrollRef = useRef(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -205,10 +207,67 @@ export function BoardChat() {
     }
   }, [sortedComments, optimisticMessage]);
 
-  // Auto-scroll to bottom
+  // Scroll behavior:
+  //   - First mount in a session (no saved position): jump to bottom instantly.
+  //   - Returning to the page within the same session: restore last scrollTop.
+  //   - New content arriving: smooth-scroll to bottom only if user is already
+  //     near the bottom, so we don't yank them away from reading history.
+  //   - Scroll position is persisted to sessionStorage (cleared when tab closes).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (hasRestoredScrollRef.current) return;
+    if (sortedComments.length === 0) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    try {
+      const saved = sessionStorage.getItem("paperclip.boardChat.scrollTop");
+      if (saved != null) {
+        const parsed = Number(saved);
+        if (Number.isFinite(parsed)) {
+          container.scrollTop = parsed;
+          hasRestoredScrollRef.current = true;
+          return;
+        }
+      }
+    } catch { /* sessionStorage unavailable */ }
+
+    container.scrollTop = container.scrollHeight;
+    hasRestoredScrollRef.current = true;
+  }, [sortedComments.length]);
+
+  useEffect(() => {
+    if (!hasRestoredScrollRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom <= 80) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [sortedComments.length, streamingText, statusText, optimisticMessage]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    let rafId: number | null = null;
+    const handleScroll = () => {
+      if (rafId != null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        try {
+          sessionStorage.setItem(
+            "paperclip.boardChat.scrollTop",
+            String(container.scrollTop),
+          );
+        } catch { /* sessionStorage unavailable */ }
+      });
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (rafId != null) cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   // Elapsed timer for thinking state
   useEffect(() => {
@@ -369,7 +428,7 @@ export function BoardChat() {
             />
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold">
-                {ceoAgent?.name ?? "Board Room"}
+                {ceoAgent?.name ?? "Conference Room"}
               </h3>
               <p className="text-xs text-muted-foreground">
                 {selectedCompany?.name ?? "Your company"}
@@ -407,7 +466,10 @@ export function BoardChat() {
             </div>
           </div>
           {/* Messages — scroll viewport flush right so the scrollbar sits on the pane/divider edge */}
-          <div className="scrollbar-auto-hide min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div
+            ref={scrollContainerRef}
+            className="scrollbar-auto-hide min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
+          >
             <div className="flex flex-col gap-4 px-4 py-3">
               {sortedComments.length === 0 && !streamingText && !sending && !optimisticMessage && (
                 <div className="py-12 text-center">
@@ -444,8 +506,8 @@ export function BoardChat() {
                       className={cn(
                         boardChatBubbleShell,
                         isUser
-                          ? "bg-blue-600 text-white [border-radius:12px_12px_0px_12px]"
-                          : "bg-muted text-foreground [border-radius:12px_12px_12px_0px]",
+                          ? "bg-blue-600 text-white [border-radius:14px_14px_4px_14px]"
+                          : "bg-card border border-border text-foreground [border-radius:14px_14px_14px_4px]",
                       )}
                     >
                       <MarkdownBody className={BOARD_CHAT_MARKDOWN_CLASS}>
@@ -462,7 +524,7 @@ export function BoardChat() {
                   <div
                     className={cn(
                       boardChatBubbleShell,
-                      "bg-blue-600 text-white [border-radius:12px_12px_0px_12px]",
+                      "bg-blue-600 text-white [border-radius:14px_14px_4px_14px]",
                     )}
                   >
                     {optimisticMessage}
@@ -476,7 +538,7 @@ export function BoardChat() {
                   <div
                     className={cn(
                       boardChatBubbleShell,
-                      "bg-muted text-foreground [border-radius:12px_12px_12px_0px]",
+                      "bg-card border border-border text-foreground [border-radius:14px_14px_14px_4px]",
                     )}
                   >
                     <MarkdownBody className={BOARD_CHAT_MARKDOWN_CLASS}>{streamingText}</MarkdownBody>
@@ -500,8 +562,8 @@ export function BoardChat() {
           </div>
 
           {/* Input */}
-          <div className="shrink-0 border-t border-border px-3 py-3">
-            <div className="flex items-center gap-2">
+          <div className="shrink-0 px-6 pt-3 pb-5">
+            <div className="flex items-end gap-2 rounded-[10px] border border-border bg-card px-3 py-2 transition-colors duration-150 focus-within:border-muted-foreground/40">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -510,17 +572,23 @@ export function BoardChat() {
                 placeholder="Ask anything about your company..."
                 rows={1}
                 wrap="off"
-                className="min-h-9 min-w-0 flex-1 resize-none overflow-x-auto whitespace-nowrap [border-radius:12px] border border-border bg-background px-3 py-1.5 text-sm leading-5 focus:outline-none focus:ring-1 focus:ring-ring"
+                className="min-h-[22px] max-h-[140px] min-w-0 flex-1 resize-none overflow-x-auto whitespace-nowrap border-0 bg-transparent p-0 text-sm leading-6 outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0"
                 disabled={sending}
               />
-              <Button
-                size="icon-sm"
+              <button
+                type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || sending}
-                className="shrink-0"
+                aria-label="Send message"
+                className={cn(
+                  "grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors duration-150 disabled:cursor-not-allowed",
+                  input.trim() && !sending
+                    ? "bg-foreground text-background hover:opacity-90"
+                    : "bg-accent text-muted-foreground",
+                )}
               >
-                <Send className="h-4 w-4" />
-              </Button>
+                <Send className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
         </div>

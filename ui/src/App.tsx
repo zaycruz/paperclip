@@ -126,7 +126,7 @@ function CloudAccessGate() {
   return <Outlet />;
 }
 
-function LegacyChatToBoardRoomRedirect() {
+function LegacyChatToConferenceRoomRedirect() {
   const { search, hash } = useLocation();
   return <Navigate to={{ pathname: "/board-chat", search, hash }} replace />;
 }
@@ -136,7 +136,7 @@ function boardRoutes() {
     <>
       <Route index element={<Navigate to="dashboard" replace />} />
       <Route path="dashboard" element={<Dashboard />} />
-      <Route path="chat" element={<LegacyChatToBoardRoomRedirect />} />
+      <Route path="chat" element={<LegacyChatToConferenceRoomRedirect />} />
       <Route path="board-chat" element={<BoardChat />} />
       <Route path="artifacts" element={<Artifacts />} />
       <Route path="onboarding" element={<OnboardingRoutePage />} />

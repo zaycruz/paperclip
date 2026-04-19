@@ -132,8 +132,8 @@ export function ActivityRow({ event, agentMap, entityNameMap, entityTitleMap, cl
   );
 
   const classes = cn(
-    "px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors",
-    link && "cursor-pointer hover:bg-accent/50",
+    "px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150",
+    link && "cursor-pointer hover:bg-accent",
     className,
   );
 

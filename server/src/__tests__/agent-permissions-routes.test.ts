@@ -483,6 +483,7 @@ describe("agent permission routes", () => {
           heartbeat: {
             enabled: false,
             intervalSec: 3600,
+            maxConcurrentRuns: 5,
           },
         },
       }),
@@ -520,6 +521,7 @@ describe("agent permission routes", () => {
           heartbeat: {
             enabled: false,
             intervalSec: 3600,
+            maxConcurrentRuns: 5,
           },
         },
       }),

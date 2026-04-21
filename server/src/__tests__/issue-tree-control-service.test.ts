@@ -15,6 +15,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
+import { issueService } from "../services/issues.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -208,5 +209,110 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
     expect(released.status).toBe("released");
     expect(released.releaseReason).toBe("operator resumed");
     expect(released.members).toHaveLength(1);
+  });
+
+  it("blocks held descendant checkout but allows root comment course-correction checkout", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const rootIssueId = randomUUID();
+    const childIssueId = randomUUID();
+    const rootRunId = randomUUID();
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "SecurityEngineer",
+      role: "engineer",
+      status: "active",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+    await db.insert(issues).values([
+      {
+        id: rootIssueId,
+        companyId,
+        title: "Paused root",
+        status: "todo",
+        priority: "medium",
+        assigneeAgentId: agentId,
+      },
+      {
+        id: childIssueId,
+        companyId,
+        parentId: rootIssueId,
+        title: "Paused child",
+        status: "todo",
+        priority: "medium",
+        assigneeAgentId: agentId,
+      },
+    ]);
+    await db.insert(heartbeatRuns).values({
+      id: rootRunId,
+      companyId,
+      agentId,
+      invocationSource: "automation",
+      triggerDetail: "system",
+      status: "queued",
+      contextSnapshot: { issueId: rootIssueId, wakeReason: "issue_commented" },
+    });
+
+    const treeSvc = issueTreeControlService(db);
+    await treeSvc.createHold(companyId, rootIssueId, {
+      mode: "pause",
+      reason: "operator requested pause",
+      actor: { actorType: "user", actorId: "board-user", userId: "board-user" },
+    });
+
+    const issueSvc = issueService(db);
+    await expect(issueSvc.checkout(childIssueId, agentId, ["todo"], randomUUID())).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        rootIssueId,
+        mode: "pause",
+      }),
+    });
+
+    const checkedOutRoot = await issueSvc.checkout(rootIssueId, agentId, ["todo"], rootRunId);
+    expect(checkedOutRoot.status).toBe("in_progress");
+    expect(checkedOutRoot.checkoutRunId).toBe(rootRunId);
+
+    await db.update(issues).set({
+      status: "todo",
+      checkoutRunId: null,
+      executionRunId: null,
+      executionAgentNameKey: null,
+      executionLockedAt: null,
+      updatedAt: new Date(),
+    }).where(eq(issues.id, rootIssueId));
+    await db.update(issueTreeHolds).set({
+      status: "released",
+      releasedAt: new Date(),
+      releasedByActorType: "user",
+      releasedByUserId: "board-user",
+      releaseReason: "switch to full pause",
+      updatedAt: new Date(),
+    }).where(eq(issueTreeHolds.rootIssueId, rootIssueId));
+    await treeSvc.createHold(companyId, rootIssueId, {
+      mode: "pause",
+      reason: "full pause",
+      releasePolicy: { strategy: "manual", note: "full_pause" },
+      actor: { actorType: "user", actorId: "board-user", userId: "board-user" },
+    });
+
+    await expect(issueSvc.checkout(rootIssueId, agentId, ["todo"], rootRunId)).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        rootIssueId,
+        mode: "pause",
+      }),
+    });
   });
 });

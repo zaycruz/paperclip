@@ -145,6 +145,7 @@ type IssueDetailComment = (IssueComment | OptimisticIssueComment) & {
   interruptedRunId?: string | null;
   queueState?: "queued";
   queueTargetRunId?: string | null;
+  queueReason?: "hold" | "active_run" | "other";
 };
 
 const FEEDBACK_TERMS_URL = import.meta.env.VITE_FEEDBACK_TERMS_URL?.trim() || "https://paperclip.ing/tos";
@@ -589,6 +590,7 @@ type IssueDetailChatTabProps = {
   mentions: MentionOption[];
   composerDisabledReason: string | null;
   composerHint: string | null;
+  queuedCommentReason: "hold" | "active_run" | "other";
   onVote: (
     commentId: string,
     vote: "up" | "down",
@@ -640,6 +642,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
   mentions,
   composerDisabledReason,
   composerHint,
+  queuedCommentReason,
   onVote,
   onAdd,
   onImageUpload,
@@ -753,11 +756,20 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
           ...nextComment,
           queueState: "queued" as const,
           queueTargetRunId: runningIssueRun?.id ?? nextComment.queueTargetRunId ?? null,
+          queueReason: queuedCommentReason,
         };
       }
       return nextComment;
     });
-  }, [comments, liveRunIds, locallyQueuedCommentRunIds, resolvedActivity, resolvedLinkedRuns, runningIssueRun]);
+  }, [
+    comments,
+    liveRunIds,
+    locallyQueuedCommentRunIds,
+    queuedCommentReason,
+    resolvedActivity,
+    resolvedLinkedRuns,
+    runningIssueRun,
+  ]);
   const timelineEvents = useMemo(
     () => extractIssueTimelineEvents(resolvedActivity),
     [resolvedActivity],
@@ -1036,7 +1048,7 @@ export function IssueDetail() {
   const [treeControlOpen, setTreeControlOpen] = useState(false);
   const [treeControlMode, setTreeControlMode] = useState<IssueTreeControlMode>("pause");
   const [treeControlReason, setTreeControlReason] = useState("");
-  const [treeControlPauseVariant, setTreeControlPauseVariant] = useState<TreeControlPauseVariant>("full_pause");
+  const [treeControlPauseVariant, setTreeControlPauseVariant] = useState<TreeControlPauseVariant>("course_correction");
   const [treeControlWakeAgentsOnResume, setTreeControlWakeAgentsOnResume] = useState(false);
   const [treeControlCancelConfirmed, setTreeControlCancelConfirmed] = useState(false);
   const [treeControlReleaseStrategy, setTreeControlReleaseStrategy] = useState<"manual" | "after_active_runs_finish">(
@@ -2625,7 +2637,8 @@ export function IssueDetail() {
   const activePauseVariant = parsePauseVariantFromNote(
     activeRootPauseHold?.releasePolicy?.note ?? activePauseHold?.releasePolicy?.note,
   );
-  const heldDescendantCount = Math.max(heldIssueIds.size - 1, 0);
+  const heldDescendantCount = activeRootPauseHold?.members?.filter((member) => member.depth > 0).length
+    ?? Math.max(heldIssueIds.size - 1, 0);
   const canShowSubtreeControls = canManageTreeControl && childIssues.length > 0;
   const canResumeSubtree = canShowSubtreeControls && activePauseHold?.isRoot === true;
   const previewTerminalSkippedCount = treeControlPreview?.skippedIssues.filter((candidate) => candidate.skipReason === "terminal_status").length ?? 0;
@@ -2638,10 +2651,21 @@ export function IssueDetail() {
         : treeControlMode === "restore"
           ? "Restore subtree"
           : "Resume subtree";
-  const deferredComposerHint =
-    activePauseHold && !activePauseHold.isRoot && activePauseVariant === "course_correction"
-      ? "Will be delivered when the subtree resumes."
-      : null;
+  const deferredComposerHint = activePauseHold && !activePauseHold.isRoot
+    ? "Will be delivered when the subtree resumes."
+    : null;
+  const rootCourseCorrectionComposerHint = activePauseHold?.isRoot && activePauseVariant === "course_correction"
+    ? (
+      issue.assigneeAgentId
+        ? `Sending this comment will wake ${agentMap.get(issue.assigneeAgentId)?.name ?? "the assignee"} in course-correction mode. Descendants stay held.`
+        : "Assign a planner above to run course corrections."
+    )
+    : null;
+  const composerHint = rootCourseCorrectionComposerHint ?? deferredComposerHint;
+  const queuedCommentReason: "hold" | "active_run" | "other" =
+    activePauseHold && (!activePauseHold.isRoot || activePauseVariant === "full_pause")
+      ? "hold"
+      : "active_run";
   const canApplyTreeControl =
     Boolean(treeControlPreview)
     && !treeControlPreviewLoading
@@ -3291,7 +3315,8 @@ export function IssueDetail() {
               suggestedAssigneeValue={suggestedAssigneeValue}
               mentions={mentionOptions}
               composerDisabledReason={commentComposerDisabledReason}
-              composerHint={deferredComposerHint}
+              composerHint={composerHint}
+              queuedCommentReason={queuedCommentReason}
               onVote={handleCommentVote}
               onAdd={handleChatAdd}
               onImageUpload={handleCommentImageUpload}

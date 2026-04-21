@@ -80,6 +80,7 @@ import {
   sanitizeRuntimeServiceBaseEnv,
 } from "./workspace-runtime.js";
 import { issueService } from "./issues.js";
+import { issueTreeControlService, isCourseCorrectionPauseReleasePolicy } from "./issue-tree-control.js";
 import {
   getIssueContinuationSummaryDocument,
   refreshIssueContinuationSummary,
@@ -167,6 +168,11 @@ function resolveCodexTransientFallbackMode(attempt: number): CodexTransientFallb
   return "fresh_session_safer_invocation";
 }
 const RUNNING_ISSUE_WAKE_REASONS_REQUIRING_FOLLOWUP = new Set(["approval_approved"]);
+const TREE_HOLD_COURSE_CORRECTION_WAKE_REASONS = new Set([
+  "issue_commented",
+  "issue_reopened_via_comment",
+  "issue_comment_mentioned",
+]);
 const SESSIONED_LOCAL_ADAPTERS = new Set([
   "claude_local",
   "codex_local",
@@ -1843,6 +1849,7 @@ export function heartbeatService(db: Db) {
   const secretsSvc = secretService(db);
   const companySkills = companySkillService(db);
   const issuesSvc = issueService(db);
+  const treeControlSvc = issueTreeControlService(db);
   const executionWorkspacesSvc = executionWorkspaceService(db);
   const environmentsSvc = environmentService(db);
   const workspaceOperationsSvc = workspaceOperationService(db);
@@ -3499,6 +3506,34 @@ export function heartbeatService(db: Db) {
 
     const issueId = readNonEmptyString(context.issueId);
     if (issueId) {
+      const activePauseHold = await treeControlSvc.getActivePauseHoldGate(run.companyId, issueId);
+      const wakeReason = readNonEmptyString(context.wakeReason) ?? readNonEmptyString(context.reason);
+      const isRootCourseCorrectionWake =
+        activePauseHold?.isRoot === true &&
+        isCourseCorrectionPauseReleasePolicy(activePauseHold.releasePolicy) &&
+        Boolean(wakeReason && TREE_HOLD_COURSE_CORRECTION_WAKE_REASONS.has(wakeReason));
+      if (activePauseHold && !isRootCourseCorrectionWake) {
+        await cancelRunInternal(run.id, "Cancelled because issue is held by an active subtree pause hold");
+        await logActivity(db, {
+          companyId: run.companyId,
+          actorType: "system",
+          actorId: "system",
+          agentId: run.agentId,
+          runId: run.id,
+          action: "issue.tree_hold_run_interrupted",
+          entityType: "heartbeat_run",
+          entityId: run.id,
+          details: {
+            issueId,
+            holdId: activePauseHold.holdId,
+            rootIssueId: activePauseHold.rootIssueId,
+            source: "heartbeat.claim_queued_run",
+            securityPrinciples: ["Complete Mediation", "Fail Securely", "Secure Defaults"],
+          },
+        });
+        return null;
+      }
+
       const dependencyReadiness = await issuesSvc.listDependencyReadiness(run.companyId, [issueId]);
       const unresolvedBlockerCount = dependencyReadiness.get(issueId)?.unresolvedBlockerCount ?? 0;
       if (unresolvedBlockerCount > 0 && !allowsBlockedIssueInteractionWake(context)) {
@@ -6083,7 +6118,37 @@ export function heartbeatService(db: Db) {
 
         const deferredPayload = parseObject(deferred.payload);
         const deferredContextSeed = parseObject(deferredPayload[DEFERRED_WAKE_CONTEXT_KEY]);
+        const activePauseHold = await treeControlSvc.getActivePauseHoldGate(issue.companyId, issue.id);
+        const deferredWakeReason = readNonEmptyString(deferredContextSeed.wakeReason) ?? readNonEmptyString(deferred.reason);
+        const canPromoteRootCourseCorrection =
+          activePauseHold?.isRoot === true &&
+          isCourseCorrectionPauseReleasePolicy(activePauseHold.releasePolicy) &&
+          Boolean(deferredWakeReason && TREE_HOLD_COURSE_CORRECTION_WAKE_REASONS.has(deferredWakeReason));
+        if (activePauseHold && !canPromoteRootCourseCorrection) {
+          await tx
+            .update(agentWakeupRequests)
+            .set({
+              status: "cancelled",
+              finishedAt: new Date(),
+              error: "Deferred wake suppressed by active subtree pause hold",
+              updatedAt: new Date(),
+            })
+            .where(eq(agentWakeupRequests.id, deferred.id));
+          continue;
+        }
+
         const promotedContextSeed: Record<string, unknown> = { ...deferredContextSeed };
+        if (activePauseHold) {
+          const courseCorrectionOnly = isCourseCorrectionPauseReleasePolicy(activePauseHold.releasePolicy);
+          promotedContextSeed.activeTreeHold = {
+            holdId: activePauseHold.holdId,
+            rootIssueId: activePauseHold.rootIssueId,
+            mode: activePauseHold.mode,
+            reason: activePauseHold.reason,
+            releasePolicy: activePauseHold.releasePolicy,
+            courseCorrectionOnly,
+          };
+        }
         const deferredCommentIds = extractWakeCommentIds(deferredContextSeed);
         const shouldReopenDeferredCommentWake =
           deferredCommentIds.length > 0 && (issue.status === "done" || issue.status === "cancelled");
@@ -6470,6 +6535,49 @@ export function heartbeatService(db: Db) {
     if (source !== "timer" && !policy.wakeOnDemand) {
       await writeSkippedRequest("heartbeat.wakeOnDemand.disabled");
       return null;
+    }
+
+    if (issueId) {
+      const activePauseHold = await treeControlSvc.getActivePauseHoldGate(agent.companyId, issueId);
+      if (activePauseHold) {
+        const wakeReason = readNonEmptyString(enrichedContextSnapshot.wakeReason) ?? reason;
+        const isRootCourseCorrectionWake =
+          activePauseHold.isRoot &&
+          isCourseCorrectionPauseReleasePolicy(activePauseHold.releasePolicy) &&
+          Boolean(wakeReason && TREE_HOLD_COURSE_CORRECTION_WAKE_REASONS.has(wakeReason));
+
+        if (!isRootCourseCorrectionWake) {
+          await writeSkippedRequest("issue_tree_hold_active");
+          await logActivity(db, {
+            companyId: agent.companyId,
+            actorType: "system",
+            actorId: "system",
+            agentId,
+            runId: null,
+            action: "issue.tree_hold_wakeup_deferred",
+            entityType: "issue",
+            entityId: issueId,
+            details: {
+              holdId: activePauseHold.holdId,
+              rootIssueId: activePauseHold.rootIssueId,
+              requestedReason: reason,
+              source,
+              triggerDetail,
+              securityPrinciples: ["Complete Mediation", "Fail Securely", "Secure Defaults"],
+            },
+          });
+          return null;
+        }
+
+        enrichedContextSnapshot.activeTreeHold = {
+          holdId: activePauseHold.holdId,
+          rootIssueId: activePauseHold.rootIssueId,
+          mode: activePauseHold.mode,
+          reason: activePauseHold.reason,
+          releasePolicy: activePauseHold.releasePolicy,
+          courseCorrectionOnly: isCourseCorrectionPauseReleasePolicy(activePauseHold.releasePolicy),
+        };
+      }
     }
 
     if (issueId) {

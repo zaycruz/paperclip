@@ -7,13 +7,14 @@ import {
   releaseIssueTreeHoldSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { issueService, issueTreeControlService, logActivity } from "../services/index.js";
+import { heartbeatService, issueService, issueTreeControlService, logActivity } from "../services/index.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function issueTreeControlRoutes(db: Db) {
   const router = Router();
   const issuesSvc = issueService(db);
   const treeControlSvc = issueTreeControlService(db);
+  const heartbeat = heartbeatService(db);
 
   async function resolveRootIssue(req: Request) {
     const rootIssueId = req.params.id as string;
@@ -89,7 +90,88 @@ export function issueTreeControlRoutes(db: Db) {
       },
     });
 
+    if (result.hold.mode === "pause") {
+      const interruptedRunIds = [...new Set(result.preview.activeRuns.map((run) => run.id))];
+      for (const runId of interruptedRunIds) {
+        await heartbeat.cancelRun(runId);
+        await logActivity(db, {
+          companyId: root.companyId,
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          agentId: actor.agentId,
+          runId: actor.runId,
+          action: "issue.tree_hold_run_interrupted",
+          entityType: "heartbeat_run",
+          entityId: runId,
+          details: {
+            holdId: result.hold.id,
+            rootIssueId: root.id,
+            reason: "active_subtree_pause_hold",
+          },
+        });
+      }
+
+      const cancelledWakeups = await treeControlSvc.cancelUnclaimedWakeupsForTree(
+        root.companyId,
+        root.id,
+        "Cancelled because an active subtree pause hold was created",
+      );
+      for (const wakeup of cancelledWakeups) {
+        await logActivity(db, {
+          companyId: root.companyId,
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          agentId: actor.agentId,
+          runId: actor.runId,
+          action: "issue.tree_hold_wakeup_deferred",
+          entityType: "agent_wakeup_request",
+          entityId: wakeup.id,
+          details: {
+            holdId: result.hold.id,
+            rootIssueId: root.id,
+            agentId: wakeup.agentId,
+            previousReason: wakeup.reason,
+          },
+        });
+      }
+    }
+
     res.status(201).json(result);
+  });
+
+  router.get("/issues/:id/tree-control/state", async (req, res) => {
+    assertBoard(req);
+    const issueId = req.params.id as string;
+    const issue = await issuesSvc.getById(issueId);
+    if (!issue) {
+      res.status(404).json({ error: "Issue not found" });
+      return;
+    }
+    assertCompanyAccess(req, issue.companyId);
+    const activePauseHold = await treeControlSvc.getActivePauseHoldGate(issue.companyId, issue.id);
+    res.json({ activePauseHold });
+  });
+
+  router.get("/issues/:id/tree-holds", async (req, res) => {
+    assertBoard(req);
+    const root = await resolveRootIssue(req);
+    if (!root) {
+      res.status(404).json({ error: "Root issue not found" });
+      return;
+    }
+    assertCompanyAccess(req, root.companyId);
+    const statusParam = typeof req.query.status === "string" ? req.query.status : null;
+    const modeParam = typeof req.query.mode === "string" ? req.query.mode : null;
+    const includeMembers = req.query.includeMembers === "true";
+    const holds = await treeControlSvc.listHolds(root.companyId, root.id, {
+      status: statusParam === "active" || statusParam === "released" ? statusParam : undefined,
+      mode:
+        modeParam === "pause" || modeParam === "resume" || modeParam === "cancel" || modeParam === "restore"
+          ? modeParam
+          : undefined,
+      includeMembers,
+    });
+    res.json(holds);
   });
 
   router.get("/issues/:id/tree-holds/:holdId", async (req, res) => {

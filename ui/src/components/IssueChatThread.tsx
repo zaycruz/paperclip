@@ -1155,6 +1155,8 @@ function IssueChatUserMessage({ message }: { message: ThreadMessage }) {
   const authorName = typeof custom.authorName === "string" ? custom.authorName : null;
   const authorUserId = typeof custom.authorUserId === "string" ? custom.authorUserId : null;
   const queued = custom.queueState === "queued" || custom.clientStatus === "queued";
+  const queueReason = typeof custom.queueReason === "string" ? custom.queueReason : null;
+  const queueBadgeLabel = queueReason === "hold" ? "\u23f8 Deferred wake" : "Queued";
   const pending = custom.clientStatus === "pending";
   const queueTargetRunId = typeof custom.queueTargetRunId === "string" ? custom.queueTargetRunId : null;
   const [copied, setCopied] = useState(false);
@@ -1191,7 +1193,7 @@ function IssueChatUserMessage({ message }: { message: ThreadMessage }) {
         {queued ? (
           <div className="mb-1.5 flex items-center gap-2">
             <span className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-100/70 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-amber-800 dark:border-amber-400/40 dark:bg-amber-500/20 dark:text-amber-200">
-              ⏸ Deferred wake
+              {queueBadgeLabel}
             </span>
             {queueTargetRunId && onInterruptQueued ? (
               <Button

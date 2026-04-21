@@ -127,7 +127,7 @@ function ColorPicker({
         aria-label="Change project color"
       />
       {open && (
-        <div className="absolute top-full left-0 mt-2 p-2 bg-popover border border-border rounded-lg shadow-lg z-50 w-max">
+        <div className="absolute top-full left-0 mt-2 p-2 bg-popover border border-border rounded-none shadow-lg z-50 w-max">
           <div className="grid grid-cols-5 gap-1.5">
             {PROJECT_COLORS.map((color) => (
               <button

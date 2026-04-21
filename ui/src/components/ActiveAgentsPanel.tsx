@@ -65,7 +65,7 @@ export function ActiveAgentsPanel({ companyId }: ActiveAgentsPanelProps) {
         Agents
       </h3>
       {runs.length === 0 ? (
-        <div className="rounded-xl border border-border p-4">
+        <div className="rounded-none border border-border p-4">
           <p className="text-sm text-muted-foreground">No recent agent runs.</p>
         </div>
       ) : (
@@ -111,7 +111,7 @@ const AgentRunCard = memo(function AgentRunCard({
 }) {
   return (
     <div className={cn(
-      "flex h-[320px] flex-col overflow-hidden rounded-xl border shadow-sm",
+      "flex h-[320px] flex-col overflow-hidden rounded-none border shadow-sm",
       isActive
         ? "border-cyan-500/25 bg-cyan-500/[0.04] shadow-[0_16px_40px_rgba(6,182,212,0.08)]"
         : "border-border bg-background/70",
@@ -144,7 +144,7 @@ const AgentRunCard = memo(function AgentRunCard({
         </div>
 
         {run.issueId && (
-          <div className="mt-3 rounded-lg border border-border/60 bg-background/60 px-2.5 py-2 text-xs">
+          <div className="mt-3 rounded-none border border-border/60 bg-background/60 px-2.5 py-2 text-xs">
             <Link
               to={`/issues/${issue?.identifier ?? run.issueId}`}
               className={cn(

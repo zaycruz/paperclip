@@ -54,7 +54,7 @@ export function ProjectWorkspaceSummaryCard({
   const actionKey = `${summary.key}:${hasRunningServices ? "stop" : "start"}`;
 
   return (
-    <div className="rounded-lg border border-border bg-background p-4 shadow-sm sm:p-5">
+    <div className="rounded-none border border-border bg-background p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
@@ -143,7 +143,7 @@ export function ProjectWorkspaceSummaryCard({
           </div>
         </div>
 
-        <div className="rounded-lg border border-border/70 bg-background px-3 py-3">
+        <div className="rounded-none border border-border/70 bg-background px-3 py-3">
           <div className="space-y-2 text-sm">
             {summary.branchName ? (
               <div className="flex items-start gap-2">

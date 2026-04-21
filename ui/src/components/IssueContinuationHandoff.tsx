@@ -57,7 +57,7 @@ export function IssueContinuationHandoff({
       ref={rootRef}
       id={`document-${ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY}`}
       className={cn(
-        "mb-3 rounded-lg border border-border bg-accent/20 p-3 transition-colors duration-1000",
+        "mb-3 rounded-none border border-border bg-accent/20 p-3 transition-colors duration-1000",
         highlighted && "border-primary/50 bg-primary/5",
       )}
     >

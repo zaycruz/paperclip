@@ -128,7 +128,7 @@ export function Companies() {
                   setSelectedCompanyId(company.id);
                 }
               }}
-              className={`group text-left bg-card border rounded-lg p-5 transition-colors cursor-pointer ${
+              className={`group text-left bg-card border rounded-none p-5 transition-colors cursor-pointer ${
                 selected
                   ? "border-primary ring-1 ring-primary"
                   : "border-border hover:border-muted-foreground/30"

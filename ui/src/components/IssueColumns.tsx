@@ -90,7 +90,7 @@ export function IssueColumnPicker({
           {!iconOnly && "Columns"}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[300px] rounded-xl border-border/70 p-1.5 shadow-xl shadow-black/10">
+      <DropdownMenuContent align="end" className="w-[300px] rounded-none border-border/70 p-1.5 shadow-xl shadow-black/10">
         <DropdownMenuLabel className="px-2 pb-1 pt-1.5">
           <div className="space-y-1">
             <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
@@ -108,7 +108,7 @@ export function IssueColumnPicker({
             checked={visibleColumnSet.has(column)}
             onSelect={(event) => event.preventDefault()}
             onCheckedChange={(checked) => onToggleColumn(column, checked === true)}
-            className="items-start rounded-lg px-3 py-2.5 pl-8"
+            className="items-start rounded-none px-3 py-2.5 pl-8"
           >
             <span className="flex flex-col gap-0.5">
               <span className="text-sm font-medium text-foreground">
@@ -123,7 +123,7 @@ export function IssueColumnPicker({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={onResetColumns}
-          className="rounded-lg px-3 py-2 text-sm"
+          className="rounded-none px-3 py-2 text-sm"
         >
           Reset defaults
           <span className="ml-auto text-xs text-muted-foreground">status, id, updated</span>

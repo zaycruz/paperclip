@@ -64,11 +64,11 @@ function deriveUserSlug(name: string | null | undefined, email: string | null | 
 
 function MenuAction({ label, description, icon: Icon, onClick, href, external = false }: MenuActionProps) {
   const className =
-    "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-accent/60";
+    "flex w-full items-start gap-3 rounded-none px-3 py-3 text-left transition-colors hover:bg-accent/60";
 
   const content = (
     <>
-      <span className="mt-0.5 rounded-lg border border-border bg-background/70 p-2 text-muted-foreground">
+      <span className="mt-0.5 rounded-none border border-border bg-background/70 p-2 text-muted-foreground">
         <Icon className="size-4" />
       </span>
       <span className="min-w-0 flex-1">
@@ -228,13 +228,13 @@ export function SidebarAccountMenu({
                 <button
                   type="button"
                   className={cn(
-                    "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-destructive/10",
+                    "flex w-full items-start gap-3 rounded-none px-3 py-3 text-left transition-colors hover:bg-destructive/10",
                     signOutMutation.isPending && "cursor-not-allowed opacity-60",
                   )}
                   onClick={() => signOutMutation.mutate()}
                   disabled={signOutMutation.isPending}
                 >
-                  <span className="mt-0.5 rounded-lg border border-border bg-background/70 p-2 text-muted-foreground">
+                  <span className="mt-0.5 rounded-none border border-border bg-background/70 p-2 text-muted-foreground">
                     <LogOut className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1">

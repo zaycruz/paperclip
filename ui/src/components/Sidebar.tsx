@@ -122,7 +122,7 @@ export function Sidebar() {
           slotTypes={["sidebarPanel"]}
           context={pluginContext}
           className="flex flex-col gap-3"
-          itemClassName="rounded-lg border border-border p-3"
+          itemClassName="rounded-none border border-border p-3"
           missingBehavior="placeholder"
         />
       </nav>

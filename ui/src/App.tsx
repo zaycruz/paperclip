@@ -156,7 +156,7 @@ function OnboardingRoutePage() {
 
   return (
     <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
+      <div className="rounded-none border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         <div className="mt-4">
@@ -233,7 +233,7 @@ function NoCompaniesStartPage() {
 
   return (
     <div className="mx-auto max-w-xl py-10">
-      <div className="rounded-lg border border-border bg-card p-6">
+      <div className="rounded-none border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">Create your first company</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Get started by creating a company.

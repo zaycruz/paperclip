@@ -524,7 +524,7 @@ function LauncherModalShell({
   const panelClassName = shellType === "openDrawer"
     ? "fixed right-0 top-0 h-full max-w-[min(44rem,100vw)] overflow-hidden border-l border-border bg-background shadow-2xl"
     : shellType === "openPopover"
-      ? "fixed overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+      ? "fixed overflow-hidden rounded-none border border-border bg-background shadow-2xl"
       : "fixed left-1/2 top-1/2 max-h-[calc(100vh-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-background shadow-2xl";
 
   return (

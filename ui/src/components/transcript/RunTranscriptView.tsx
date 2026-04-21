@@ -713,7 +713,7 @@ function TranscriptToolCard({
         : "text-emerald-700 dark:text-emerald-300";
   const detailsClass = cn(
     "space-y-3",
-    block.status === "error" && "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3",
+    block.status === "error" && "rounded-none border border-red-500/20 bg-red-500/[0.06] p-3",
   );
   const iconClass = cn(
     "mt-0.5 h-3.5 w-3.5 shrink-0",
@@ -730,7 +730,7 @@ function TranscriptToolCard({
       : summarizeToolResult(block.result, block.isError, density);
 
   return (
-    <div className={cn(block.status === "error" && "rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3")}>
+    <div className={cn(block.status === "error" && "rounded-none border border-red-500/20 bg-red-500/[0.04] p-3")}>
       <div className="flex items-start gap-2">
         {block.status === "error" ? (
           <CircleAlert className={iconClass} />
@@ -824,7 +824,7 @@ function TranscriptCommandGroup({
       : "text-foreground/70";
 
   return (
-    <div className={cn(showExpandedErrorState && "rounded-xl border border-red-500/20 bg-red-500/[0.04] p-3")}>
+    <div className={cn(showExpandedErrorState && "rounded-none border border-red-500/20 bg-red-500/[0.04] p-3")}>
       <div
         role="button"
         tabIndex={0}
@@ -888,7 +888,7 @@ function TranscriptCommandGroup({
         </button>
       </div>
       {open && (
-        <div className={cn("mt-3 space-y-3", hasError && "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3")}>
+        <div className={cn("mt-3 space-y-3", hasError && "rounded-none border border-red-500/20 bg-red-500/[0.06] p-3")}>
           {block.items.map((item, index) => (
             <div key={`${item.ts}-${index}`} className="space-y-2">
               <div className="flex items-center gap-2">
@@ -952,7 +952,7 @@ function TranscriptToolGroup({
     : "text-foreground/70";
 
   return (
-    <div className="rounded-xl border border-border/40 bg-muted/[0.25]">
+    <div className="rounded-none border border-border/40 bg-muted/[0.25]">
       <div
         role="button"
         tabIndex={0}
@@ -1092,7 +1092,7 @@ function TranscriptEventRow({
   const compact = density === "compact";
   const toneClasses =
     block.tone === "error"
-      ? "rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-red-700 dark:text-red-300"
+      ? "rounded-none border border-red-500/20 bg-red-500/[0.06] p-3 text-red-700 dark:text-red-300"
       : block.tone === "warn"
         ? "text-amber-700 dark:text-amber-300"
         : block.tone === "info"
@@ -1159,7 +1159,7 @@ function TranscriptDiffGroup({
     : "diff";
 
   return (
-    <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-2">
+    <div className="rounded-none border border-blue-500/20 bg-blue-500/[0.04] p-2">
       <div
         role="button"
         tabIndex={0}
@@ -1245,7 +1245,7 @@ function TranscriptStderrGroup({
   const [open, setOpen] = useState(false);
   const compact = density === "compact";
   return (
-    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2 text-amber-700 dark:text-amber-300">
+    <div className="rounded-none border border-amber-500/20 bg-amber-500/[0.06] p-2 text-amber-700 dark:text-amber-300">
       <div
         role="button"
         tabIndex={0}
@@ -1281,7 +1281,7 @@ function TranscriptSystemGroup({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-2 text-blue-700 dark:text-blue-300">
+    <div className="rounded-none border border-blue-500/20 bg-blue-500/[0.04] p-2 text-blue-700 dark:text-blue-300">
       <div
         role="button"
         tabIndex={0}

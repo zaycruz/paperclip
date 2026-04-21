@@ -1481,7 +1481,7 @@ export function NewIssueDialog() {
               />
             </div>
             {stagedFiles.length > 0 ? (
-              <div className="mt-4 space-y-3 rounded-lg border border-border/70 p-3">
+              <div className="mt-4 space-y-3 rounded-none border border-border/70 p-3">
               {stagedDocuments.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-xs font-medium text-muted-foreground">Documents</div>

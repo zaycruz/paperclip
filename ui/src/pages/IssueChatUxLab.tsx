@@ -203,13 +203,13 @@ export function IssueChatUxLab() {
         accentClassName="bg-[linear-gradient(180deg,rgba(168,85,247,0.06),transparent_28%),var(--background)]"
       >
         <div className="space-y-4">
-          <div className="rounded-xl border border-border/60 bg-accent/10 p-4">
+          <div className="rounded-none border border-border/60 bg-accent/10 p-4">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Default interval (2.2s)
             </div>
             <RotatingReasoningDemo />
           </div>
-          <div className="rounded-xl border border-border/60 bg-accent/10 p-4">
+          <div className="rounded-none border border-border/60 bg-accent/10 p-4">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Fast interval (1s) — stress test
             </div>
@@ -226,11 +226,11 @@ export function IssueChatUxLab() {
         accentClassName="bg-[linear-gradient(180deg,rgba(16,185,129,0.06),transparent_28%),var(--background)]"
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/60 bg-accent/10 p-4">
+          <div className="rounded-none border border-border/60 bg-accent/10 p-4">
             <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Active run — shimmer
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg px-1 py-2">
+            <div className="flex items-center gap-2.5 rounded-none px-1 py-2">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
                 <span className="shimmer-text">Working</span>
@@ -238,11 +238,11 @@ export function IssueChatUxLab() {
               <span className="text-xs text-muted-foreground/60">for 12s</span>
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-accent/10 p-4">
+          <div className="rounded-none border border-border/60 bg-accent/10 p-4">
             <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Completed run — static
             </div>
-            <div className="flex items-center gap-2.5 rounded-lg px-1 py-2">
+            <div className="flex items-center gap-2.5 rounded-none px-1 py-2">
               <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/70" />

@@ -74,14 +74,14 @@ export function BudgetPolicyCard({
     </div>
   ) : (
     <div className="grid gap-3 sm:grid-cols-2">
-      <div className="rounded-xl border border-border/70 bg-black/[0.18] px-4 py-3">
+      <div className="rounded-none border border-border/70 bg-black/[0.18] px-4 py-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Observed</div>
         <div className="mt-2 text-xl font-semibold tabular-nums">{formatCents(summary.observedAmount)}</div>
         <div className="mt-1 text-xs text-muted-foreground">
           {summary.amount > 0 ? `${summary.utilizationPercent}% of limit` : "No cap configured"}
         </div>
       </div>
-      <div className="rounded-xl border border-border/70 bg-black/[0.18] px-4 py-3">
+      <div className="rounded-none border border-border/70 bg-black/[0.18] px-4 py-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Budget</div>
         <div className="mt-2 text-xl font-semibold tabular-nums">
           {summary.amount > 0 ? formatCents(summary.amount) : "Disabled"}
@@ -116,7 +116,7 @@ export function BudgetPolicyCard({
   );
 
   const pausedPane = summary.paused ? (
-    <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+    <div className="flex items-start gap-2 rounded-none border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
       <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
         {summary.scopeType === "project"
@@ -127,7 +127,7 @@ export function BudgetPolicyCard({
   ) : null;
 
   const saveSection = onSave ? (
-    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end", isPlain ? "" : "rounded-xl border border-border/70 bg-background/50 p-3")}>
+    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end", isPlain ? "" : "rounded-none border border-border/70 bg-background/50 p-3")}>
       <div className="min-w-0 flex-1">
         <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
           Budget (USD)

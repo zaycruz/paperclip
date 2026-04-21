@@ -66,7 +66,7 @@ export function RoutineVariablesEditor({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-left">
+      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-none border border-border/70 px-3 py-2 text-left">
         <div>
           <p className="text-sm font-medium">Variables</p>
           <p className="text-xs text-muted-foreground">
@@ -77,7 +77,7 @@ export function RoutineVariablesEditor({
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-3 pt-3">
         {syncedVariables.map((variable) => (
-          <div key={variable.name} className="rounded-lg border border-border/70 p-4">
+          <div key={variable.name} className="rounded-none border border-border/70 p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="font-mono text-xs">
                 {`{{${variable.name}}}`}
@@ -227,7 +227,7 @@ export function RoutineVariablesEditor({
 
 export function RoutineVariablesHint() {
   return (
-    <div className="rounded-lg border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
+    <div className="rounded-none border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">
       Use `{"{{variable_name}}"}` placeholders in the instructions to prompt for inputs when the routine runs.
     </div>
   );

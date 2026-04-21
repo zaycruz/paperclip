@@ -712,7 +712,7 @@ export function IssueDocumentsSection({
 
       {draft?.isNew && (
         <div
-          className="space-y-3 rounded-lg border border-border bg-accent/10 p-3"
+          className="space-y-3 rounded-none border border-border bg-accent/10 p-3"
           onBlurCapture={handleDraftBlur}
           onKeyDown={handleDraftKeyDown}
         >
@@ -769,7 +769,7 @@ export function IssueDocumentsSection({
         <div
           id="document-plan"
           className={cn(
-            "rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 transition-colors duration-1000",
+            "rounded-none border border-amber-500/30 bg-amber-500/5 p-3 transition-colors duration-1000",
             highlightDocumentKey === "plan" && "border-primary/50 bg-primary/5",
           )}
         >
@@ -813,7 +813,7 @@ export function IssueDocumentsSection({
               key={doc.id}
               id={`document-${doc.key}`}
               className={cn(
-                "rounded-lg border border-border p-3 transition-colors duration-1000",
+                "rounded-none border border-border p-3 transition-colors duration-1000",
                 highlightDocumentKey === doc.key && "border-primary/50 bg-primary/5",
               )}
             >

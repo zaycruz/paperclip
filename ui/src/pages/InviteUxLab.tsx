@@ -571,7 +571,7 @@ function CompanyInvitesPreview() {
             </div>
           </fieldset>
 
-          <div className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-none border border-border px-4 py-3 text-sm text-muted-foreground">
             Each invite link is single-use. The first successful use consumes the link and creates or reuses the matching join request before approval.
           </div>
 

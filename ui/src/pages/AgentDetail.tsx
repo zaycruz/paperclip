@@ -317,7 +317,7 @@ export function RunInvocationCard({
     || payload.env !== undefined;
 
   return (
-    <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
+    <div className="rounded-none border border-border bg-background/60 p-3 space-y-2">
       <div className="text-xs font-medium text-muted-foreground">Invocation</div>
       {typeof payload.adapterType === "string" && (
         <div className="text-xs"><span className="text-muted-foreground">Adapter: </span>{payload.adapterType}</div>
@@ -528,7 +528,7 @@ function WorkspaceOperationsSection({
   if (operations.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-background/60 p-3 space-y-3">
+    <div className="rounded-none border border-border bg-background/60 p-3 space-y-3">
       <div className="text-xs font-medium text-muted-foreground">
         Workspace ({operations.length})
       </div>
@@ -913,7 +913,7 @@ export function AgentDetail() {
             value={agent.icon}
             onChange={(icon) => updateIcon.mutate(icon)}
           >
-            <button className="shrink-0 flex items-center justify-center h-12 w-12 rounded-lg bg-accent hover:bg-accent/80 transition-colors">
+            <button className="shrink-0 flex items-center justify-center h-12 w-12 rounded-none bg-accent hover:bg-accent/80 transition-colors">
               <AgentIcon icon={agent.icon} className="h-6 w-6" />
             </button>
           </AgentIconPicker>
@@ -1041,7 +1041,7 @@ export function AgentDetail() {
       {/* Floating Save/Cancel (desktop) */}
       {!isMobile && showConfigActionBar && (
         <div className="fixed bottom-6 right-6 z-30">
-          <div className="flex items-center gap-2 bg-background/90 backdrop-blur-sm border border-border rounded-lg px-3 py-1.5 shadow-lg">
+          <div className="flex items-center gap-2 bg-background/90 backdrop-blur-sm border border-border rounded-none px-3 py-1.5 shadow-lg">
             <Button
               variant="ghost"
               size="sm"
@@ -1224,7 +1224,7 @@ function LatestRunCard({ runs, agentId }: { runs: HeartbeatRun[]; agentId: strin
       <Link
         to={`/agents/${agentId}/runs/${run.id}`}
         className={cn(
-          "block border rounded-lg p-4 space-y-2 w-full no-underline transition-colors hover:bg-muted/50 cursor-pointer",
+          "block border rounded-none p-4 space-y-2 w-full no-underline transition-colors hover:bg-muted/50 cursor-pointer",
           isLive ? "border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.08)]" : "border-border"
         )}
       >
@@ -1306,7 +1306,7 @@ function AgentOverview({
         {assignedIssues.length === 0 ? (
           <p className="text-sm text-muted-foreground">No recent issues.</p>
         ) : (
-          <div className="border border-border rounded-lg">
+          <div className="border border-border rounded-none">
             {assignedIssues.slice(0, 10).map((issue) => (
               <EntityRow
                 key={issue.id}
@@ -1353,7 +1353,7 @@ function CostsSection({
   return (
     <div className="space-y-4">
       {runtimeState && (
-        <div className="border border-border rounded-lg p-4">
+        <div className="border border-border rounded-none p-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 tabular-nums">
             <div>
               <span className="text-xs text-muted-foreground block">Input tokens</span>
@@ -1375,7 +1375,7 @@ function CostsSection({
         </div>
       )}
       {runsWithCost.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-none overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border bg-accent/20">
@@ -1626,7 +1626,7 @@ function ConfigurationTab({
 
       <div>
         <h3 className="text-sm font-medium mb-3">Permissions</h3>
-        <div className="border border-border rounded-lg p-4 space-y-4">
+        <div className="border border-border rounded-none p-4 space-y-4">
           <div className="flex items-center justify-between gap-4 text-sm">
             <div className="space-y-1">
               <div>Can create new agents</div>
@@ -2186,7 +2186,7 @@ function PromptsTab({
         }
       >
         <div className={cn(
-          "min-w-0 w-full border border-border rounded-lg p-3 space-y-3",
+          "min-w-0 w-full border border-border rounded-none p-3 space-y-3",
           isMobile && showFilePanel && "block",
           isMobile && !showFilePanel && "hidden",
         )}>
@@ -2319,7 +2319,7 @@ function PromptsTab({
           />
         )}
 
-        <div className={cn("min-w-0 w-full overflow-hidden border border-border rounded-lg p-4 space-y-3", isMobile && showFilePanel && "hidden")}>
+        <div className={cn("min-w-0 w-full overflow-hidden border border-border rounded-none p-4 space-y-3", isMobile && showFilePanel && "hidden")}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               {isMobile && (
@@ -2413,7 +2413,7 @@ function PromptsTab({
 function PromptsTabSkeleton() {
   return (
     <div className="max-w-5xl space-y-4">
-      <div className="rounded-lg border border-border p-4 space-y-4">
+      <div className="rounded-none border border-border p-4 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <Skeleton className="h-4 w-40" />
@@ -2431,7 +2431,7 @@ function PromptsTabSkeleton() {
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <div className="rounded-lg border border-border p-3 space-y-3">
+        <div className="rounded-none border border-border p-3 space-y-3">
           <div className="flex items-center justify-between">
             <Skeleton className="h-4 w-12" />
             <Skeleton className="h-8 w-16" />
@@ -2443,7 +2443,7 @@ function PromptsTabSkeleton() {
             ))}
           </div>
         </div>
-        <div className="rounded-lg border border-border p-4 space-y-3">
+        <div className="rounded-none border border-border p-4 space-y-3">
           <div className="space-y-2">
             <Skeleton className="h-4 w-48" />
             <Skeleton className="h-3 w-28" />
@@ -2677,7 +2677,7 @@ function AgentSkillsTab({
       </div>
 
       {skillSnapshot?.warnings.length ? (
-        <div className="space-y-1 rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
+        <div className="space-y-1 rounded-none border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
           {skillSnapshot.warnings.map((warning) => (
             <div key={warning}>{warning}</div>
           ))}
@@ -2685,7 +2685,7 @@ function AgentSkillsTab({
       ) : null}
 
       {unsupportedSkillMessage ? (
-        <div className="rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-none border border-border px-4 py-3 text-sm text-muted-foreground">
           {unsupportedSkillMessage}
         </div>
       ) : null}
@@ -2837,7 +2837,7 @@ function AgentSkillsTab({
           })()}
 
           {desiredOnlyMissingSkills.length > 0 && (
-            <div className="rounded-xl border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
+            <div className="rounded-none border border-amber-300/60 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
               <div className="font-medium">Requested skills missing from the company library</div>
               <div className="mt-1 text-xs">
                 {desiredOnlyMissingSkills.join(", ")}
@@ -2973,7 +2973,7 @@ function RunsTab({
       );
     }
     return (
-      <div className="border border-border rounded-lg overflow-x-hidden">
+      <div className="border border-border rounded-none overflow-x-hidden">
         {sorted.map((run) => (
           <RunListItem key={run.id} run={run} isSelected={false} agentId={agentRouteId} />
         ))}
@@ -2986,7 +2986,7 @@ function RunsTab({
     <div className="flex gap-0">
       {/* Left: run list — border stretches full height, content sticks */}
       <div className={cn(
-        "shrink-0 border border-border rounded-lg",
+        "shrink-0 border border-border rounded-none",
         selectedRun ? "w-72" : "w-full",
       )}>
         <div className="sticky top-4 overflow-y-auto" style={{ maxHeight: "calc(100vh - 2rem)" }}>
@@ -3161,7 +3161,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
   return (
     <div className="space-y-4 min-w-0">
       {/* Run summary card */}
-      <div className="border border-border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-none overflow-hidden">
         <div className="flex flex-col sm:flex-row">
           {/* Left column: status + timing */}
           <div className="flex-1 p-4 space-y-3">
@@ -3423,7 +3423,7 @@ function RunDetail({ run: initialRun, agentRouteId, adapterType, adapterConfig }
       {touchedIssues && touchedIssues.length > 0 && (
         <div className="space-y-2">
           <span className="text-xs font-medium text-muted-foreground">Issues Touched ({touchedIssues.length})</span>
-          <div className="border border-border rounded-lg divide-y divide-border">
+          <div className="border border-border rounded-none divide-y divide-border">
             {touchedIssues.map((issue) => (
               <Link
                 key={issue.issueId}
@@ -3891,7 +3891,7 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
           Transcript ({transcript.length})
         </span>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-background/70 p-0.5">
+          <div className="inline-flex rounded-none border border-border/70 bg-background/70 p-0.5">
             {(["nice", "raw"] as const).map((mode) => (
               <button
                 key={mode}
@@ -3942,7 +3942,7 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
           emptyMessage={run.logRef ? "Waiting for transcript..." : "No persisted transcript for this run."}
         />
         {logError && (
-          <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2 text-xs text-red-700 dark:text-red-300">
+          <div className="mt-3 rounded-none border border-red-500/20 bg-red-500/[0.06] px-3 py-2 text-xs text-red-700 dark:text-red-300">
             {logError}
           </div>
         )}
@@ -3950,7 +3950,7 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
       </div>
 
       {(run.status === "failed" || run.status === "timed_out") && (
-        <div className="rounded-lg border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
+        <div className="rounded-none border border-red-300 dark:border-red-500/30 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
           <div className="text-xs font-medium text-red-700 dark:text-red-300">Failure details</div>
           {run.error && (
             <div className="text-xs text-red-600 dark:text-red-200">
@@ -3988,7 +3988,7 @@ function LogViewer({ run, adapterType }: { run: HeartbeatRun; adapterType: strin
       {events.length > 0 && (
         <div>
           <div className="mb-2 text-xs font-medium text-muted-foreground">Events ({events.length})</div>
-          <div className="bg-neutral-100 dark:bg-neutral-950 rounded-lg p-3 font-mono text-xs space-y-0.5">
+          <div className="bg-neutral-100 dark:bg-neutral-950 rounded-none p-3 font-mono text-xs space-y-0.5">
             {events.map((evt) => {
               const color = evt.color
                 ?? (evt.level ? levelColors[evt.level] : null)
@@ -4065,7 +4065,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
     <div className="space-y-6">
       {/* New token banner */}
       {newToken && (
-        <div className="border border-yellow-300 dark:border-yellow-600/40 bg-yellow-50 dark:bg-yellow-500/5 rounded-lg p-4 space-y-2">
+        <div className="border border-yellow-300 dark:border-yellow-600/40 bg-yellow-50 dark:bg-yellow-500/5 rounded-none p-4 space-y-2">
           <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
             API key created — copy it now, it will not be shown again.
           </p>
@@ -4103,7 +4103,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
       )}
 
       {/* Create new key */}
-      <div className="border border-border rounded-lg p-4 space-y-3">
+      <div className="border border-border rounded-none p-4 space-y-3">
         <h3 className="text-xs font-medium text-muted-foreground flex items-center gap-2">
           <Key className="h-3.5 w-3.5" />
           Create API Key
@@ -4144,7 +4144,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
             Active Keys
           </h3>
-          <div className="border border-border rounded-lg divide-y divide-border">
+          <div className="border border-border rounded-none divide-y divide-border">
             {activeKeys.map((key: AgentKey) => (
               <div key={key.id} className="flex items-center justify-between px-4 py-2.5">
                 <div>
@@ -4174,7 +4174,7 @@ function KeysTab({ agentId, companyId }: { agentId: string; companyId?: string }
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
             Revoked Keys
           </h3>
-          <div className="border border-border rounded-lg divide-y divide-border opacity-50">
+          <div className="border border-border rounded-none divide-y divide-border opacity-50">
             {revokedKeys.map((key: AgentKey) => (
               <div key={key.id} className="flex items-center justify-between px-4 py-2.5">
                 <div>

@@ -36,7 +36,7 @@ function Section({
   emptyLabel: string;
 }) {
   return (
-    <section className="space-y-3 rounded-lg border border-border p-3">
+    <section className="space-y-3 rounded-none border border-border p-3">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="text-xs text-muted-foreground">{description}</p>

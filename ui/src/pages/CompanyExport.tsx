@@ -537,7 +537,7 @@ function ExportPreviewPane({
         ) : isMarkdown ? (
           <MarkdownBody resolveImageSrc={resolveImageSrc} softBreaks={false} linkIssueReferences={false}>{textContent ?? ""}</MarkdownBody>
         ) : imageSrc ? (
-          <div className="flex min-h-[520px] items-center justify-center rounded-lg border border-border bg-accent/10 p-6">
+          <div className="flex min-h-[520px] items-center justify-center rounded-none border border-border bg-accent/10 p-6">
             <img src={imageSrc} alt={selectedFile} className="max-h-[480px] max-w-full object-contain" />
           </div>
         ) : textContent !== null ? (
@@ -545,7 +545,7 @@ function ExportPreviewPane({
             <code>{textContent}</code>
           </pre>
         ) : (
-          <div className="rounded-lg border border-border bg-accent/10 px-4 py-3 text-sm text-muted-foreground">
+          <div className="rounded-none border border-border bg-accent/10 px-4 py-3 text-sm text-muted-foreground">
             Binary asset preview is not available for this file type.
           </div>
         )}

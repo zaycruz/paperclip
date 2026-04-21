@@ -180,7 +180,7 @@ export function CompanyInvites() {
         </p>
       </div>
 
-      <section className="space-y-4 rounded-xl border border-border p-5">
+      <section className="space-y-4 rounded-none border border-border p-5">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Create invite</h2>
           <p className="text-sm text-muted-foreground">
@@ -190,7 +190,7 @@ export function CompanyInvites() {
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-medium">Choose a role</legend>
-          <div className="rounded-xl border border-border">
+          <div className="rounded-none border border-border">
             {inviteRoleOptions.map((option, index) => {
               const checked = humanRole === option.value;
               return (
@@ -224,7 +224,7 @@ export function CompanyInvites() {
           </div>
         </fieldset>
 
-        <div className="rounded-lg border border-border px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-none border border-border px-4 py-3 text-sm text-muted-foreground">
           Each invite link is single-use. The first successful use consumes the link and creates or reuses the matching join request before approval.
         </div>
 
@@ -236,7 +236,7 @@ export function CompanyInvites() {
         </div>
 
         {latestInviteUrl ? (
-          <div className="space-y-3 rounded-lg border border-border px-4 py-4">
+          <div className="space-y-3 rounded-none border border-border px-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium">Latest invite link</div>
@@ -273,7 +273,7 @@ export function CompanyInvites() {
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-border">
+      <section className="rounded-none border border-border">
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Invite history</h2>

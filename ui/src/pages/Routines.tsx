@@ -915,7 +915,7 @@ export function Routines() {
               />
             </div>
           ) : (
-            <div className="rounded-lg border border-border">
+            <div className="rounded-none border border-border">
               {routineGroups.map((group) => (
                 <Collapsible
                   key={group.key}

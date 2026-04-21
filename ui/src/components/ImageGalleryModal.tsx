@@ -122,7 +122,7 @@ export function ImageGalleryModal({
                 ref={imageRef}
                 src={current.contentPath}
                 alt={current.originalFilename ?? "attachment"}
-                className="max-w-full max-h-full object-contain select-none rounded-lg"
+                className="max-w-full max-h-full object-contain select-none rounded-none"
                 draggable={false}
               />
             </div>

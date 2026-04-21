@@ -159,7 +159,7 @@ function statusBadge(status: string) {
 
 function IssueWorkspaceCardSkeleton() {
   return (
-    <div className="rounded-lg border border-border p-3 space-y-3" data-testid="issue-workspace-card-skeleton">
+    <div className="rounded-none border border-border p-3 space-y-3" data-testid="issue-workspace-card-skeleton">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-4 rounded-full" />
@@ -351,7 +351,7 @@ export function IssueWorkspaceCard({
   const showEditingControls = livePreview || editing;
 
   return (
-    <div className="rounded-lg border border-border p-3 space-y-2">
+    <div className="rounded-none border border-border p-3 space-y-2">
       {/* Header row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">

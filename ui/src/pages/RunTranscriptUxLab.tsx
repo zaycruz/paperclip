@@ -60,7 +60,7 @@ function RunDetailPreview({
   density: TranscriptDensity;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-background/80 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+    <div className="overflow-hidden rounded-none border border-border/70 bg-background/80 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
       <div className="border-b border-border/60 bg-background/90 px-5 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="uppercase tracking-[0.18em] text-[10px]">
@@ -97,7 +97,7 @@ function LiveWidgetPreview({
   density: TranscriptDensity;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-cyan-500/25 bg-background/85 shadow-[0_20px_50px_rgba(6,182,212,0.10)]">
+    <div className="overflow-hidden rounded-none border border-cyan-500/25 bg-background/85 shadow-[0_20px_50px_rgba(6,182,212,0.10)]">
       <div className="border-b border-border/60 bg-cyan-500/[0.05] px-5 py-4">
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700 dark:text-cyan-300">
           Live Runs
@@ -149,7 +149,7 @@ function DashboardPreview({
   return (
     <div className="max-w-md">
       <div className={cn(
-        "flex h-[320px] flex-col overflow-hidden rounded-xl border shadow-[0_20px_40px_rgba(15,23,42,0.10)]",
+        "flex h-[320px] flex-col overflow-hidden rounded-none border shadow-[0_20px_40px_rgba(15,23,42,0.10)]",
         streaming
           ? "border-cyan-500/25 bg-cyan-500/[0.04]"
           : "border-border bg-background/75",
@@ -172,7 +172,7 @@ function DashboardPreview({
               <ExternalLink className="h-2.5 w-2.5" />
             </span>
           </div>
-          <div className="mt-3 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs text-cyan-700 dark:text-cyan-300">
+          <div className="mt-3 rounded-none border border-border/60 bg-background/60 px-3 py-2 text-xs text-cyan-700 dark:text-cyan-300">
             {runTranscriptFixtureMeta.issueIdentifier} - {runTranscriptFixtureMeta.issueTitle}
           </div>
         </div>
@@ -223,14 +223,14 @@ export function RunTranscriptUxLab() {
                     type="button"
                     onClick={() => setSelectedSurface(option.id)}
                     className={cn(
-                      "w-full rounded-xl border px-4 py-3 text-left transition-all",
+                      "w-full rounded-none border px-4 py-3 text-left transition-all",
                       selectedSurface === option.id
                         ? "border-cyan-500/35 bg-cyan-500/[0.10] shadow-[0_12px_24px_rgba(6,182,212,0.12)]"
                         : "border-border/70 bg-background/70 hover:border-cyan-500/20 hover:bg-cyan-500/[0.04]",
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="rounded-lg border border-current/15 p-2 text-cyan-700 dark:text-cyan-300">
+                      <span className="rounded-none border border-current/15 p-2 text-cyan-700 dark:text-cyan-300">
                         <Icon className="h-4 w-4" />
                       </span>
                       <span className="min-w-0">

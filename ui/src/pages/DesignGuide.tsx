@@ -1067,7 +1067,7 @@ export function DesignGuide() {
       {/*  LOG VIEWER                                                   */}
       {/* ============================================================ */}
       <Section title="Log Viewer">
-        <div className="bg-neutral-950 rounded-lg p-3 font-mono text-xs max-h-80 overflow-y-auto">
+        <div className="bg-neutral-950 rounded-none p-3 font-mono text-xs max-h-80 overflow-y-auto">
           <div className="text-foreground">[12:00:01] INFO  Agent started successfully</div>
           <div className="text-foreground">[12:00:02] INFO  Processing task PAP-001</div>
           <div className="text-yellow-400">[12:00:05] WARN  Rate limit approaching (80%)</div>
@@ -1214,7 +1214,7 @@ export function DesignGuide() {
       {/*  COST TABLE PATTERN                                           */}
       {/* ============================================================ */}
       <Section title="Cost Table Pattern">
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border rounded-none overflow-hidden">
           <table className="w-full text-xs">
             <thead className="border-b border-border bg-accent/20">
               <tr>

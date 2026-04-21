@@ -189,7 +189,7 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
         </div>
       )}
       {recommendedAction && (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3.5 py-3">
+        <div className="rounded-none border border-amber-500/20 bg-amber-500/10 px-3.5 py-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300">
             Recommended action
           </p>
@@ -197,7 +197,7 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
         </div>
       )}
       {nextActionOnApproval && (
-        <div className="rounded-lg border border-border/60 bg-background/60 px-3.5 py-3">
+        <div className="rounded-none border border-border/60 bg-background/60 px-3.5 py-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">On approval</p>
           <p className="mt-1 leading-6 text-foreground">{nextActionOnApproval}</p>
         </div>
@@ -220,7 +220,7 @@ function BoardApprovalPayloadContent({ payload }: { payload: Record<string, unkn
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Proposed comment
           </p>
-          <pre className="max-h-48 overflow-auto rounded-lg border border-border/60 bg-muted/50 px-3.5 py-3 font-mono text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
+          <pre className="max-h-48 overflow-auto rounded-none border border-border/60 bg-muted/50 px-3.5 py-3 font-mono text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
             {proposedComment}
           </pre>
         </div>

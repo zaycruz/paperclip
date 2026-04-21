@@ -101,7 +101,7 @@ export function InstanceGeneralSettings() {
         </div>
       )}
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Deployment and auth</h2>
@@ -134,7 +134,7 @@ export function InstanceGeneralSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <h2 className="text-sm font-semibold">Censor username in logs</h2>
@@ -153,7 +153,7 @@ export function InstanceGeneralSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <h2 className="text-sm font-semibold">Keyboard shortcuts</h2>
@@ -171,7 +171,7 @@ export function InstanceGeneralSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="space-y-5">
           <div className="space-y-1.5">
             <h2 className="text-sm font-semibold">Backup retention</h2>
@@ -193,7 +193,7 @@ export function InstanceGeneralSettings() {
                     type="button"
                     disabled={updateGeneralMutation.isPending}
                     className={cn(
-                      "rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                      "rounded-none border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                       active
                         ? "border-foreground bg-accent text-foreground"
                         : "border-border bg-background hover:bg-accent/50",
@@ -223,7 +223,7 @@ export function InstanceGeneralSettings() {
                     type="button"
                     disabled={updateGeneralMutation.isPending}
                     className={cn(
-                      "rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                      "rounded-none border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                       active
                         ? "border-foreground bg-accent text-foreground"
                         : "border-border bg-background hover:bg-accent/50",
@@ -253,7 +253,7 @@ export function InstanceGeneralSettings() {
                     type="button"
                     disabled={updateGeneralMutation.isPending}
                     className={cn(
-                      "rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                      "rounded-none border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                       active
                         ? "border-foreground bg-accent text-foreground"
                         : "border-border bg-background hover:bg-accent/50",
@@ -273,7 +273,7 @@ export function InstanceGeneralSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="space-y-4">
           <div className="space-y-1.5">
             <h2 className="text-sm font-semibold">AI feedback sharing</h2>
@@ -293,7 +293,7 @@ export function InstanceGeneralSettings() {
             ) : null}
           </div>
           {feedbackDataSharingPreference === "prompt" ? (
-            <div className="rounded-lg border border-border/70 bg-accent/20 px-3 py-2 text-sm text-muted-foreground">
+            <div className="rounded-none border border-border/70 bg-accent/20 px-3 py-2 text-sm text-muted-foreground">
               No default is saved yet. The next thumbs up or thumbs down choice will ask once and
               then save the answer here.
             </div>
@@ -318,7 +318,7 @@ export function InstanceGeneralSettings() {
                   type="button"
                   disabled={updateGeneralMutation.isPending}
                   className={cn(
-                    "rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                    "rounded-none border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                     active
                       ? "border-foreground bg-accent text-foreground"
                       : "border-border bg-background hover:bg-accent/50",
@@ -349,7 +349,7 @@ export function InstanceGeneralSettings() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="rounded-none border border-border bg-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <h2 className="text-sm font-semibold">Sign out</h2>
@@ -374,7 +374,7 @@ export function InstanceGeneralSettings() {
 
 function StatusBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-background px-3 py-3">
+    <div className="rounded-none border border-border bg-background px-3 py-3">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-2 text-sm font-medium">{value}</div>
     </div>

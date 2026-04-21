@@ -278,7 +278,7 @@ export function CompanyAccess() {
       </div>
 
       {access && !access.currentUserRole && (
-        <div className="rounded-xl border border-amber-500/40 px-4 py-3 text-sm text-amber-200">
+        <div className="rounded-none border border-amber-500/40 px-4 py-3 text-sm text-amber-200">
           This account can manage access here through instance-admin privileges, but it does not currently hold an active company membership.
         </div>
       )}
@@ -295,7 +295,7 @@ export function CompanyAccess() {
         </div>
 
         {access?.canApproveJoinRequests && pendingHumanJoinRequests.length > 0 ? (
-          <div className="space-y-3 rounded-xl border border-border px-4 py-4">
+          <div className="space-y-3 rounded-none border border-border px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold">Pending human joins</h3>
@@ -338,7 +338,7 @@ export function CompanyAccess() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-xl border border-border">
+        <div className="overflow-hidden rounded-none border border-border">
           <div className="grid grid-cols-[minmax(0,1.5fr)_120px_120px_minmax(0,1.2fr)_180px] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <div>User account</div>
             <div>Role</div>
@@ -450,7 +450,7 @@ export function CompanyAccess() {
                     Roles provide implicit grants automatically. Explicit grants below are only for overrides and extra access that should persist even if the role changes.
                   </p>
                 </div>
-                <div className="rounded-lg border border-border px-3 py-3">
+                <div className="rounded-none border border-border px-3 py-3">
                   <div className="text-sm font-medium">Implicit grants from role</div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {draftRole
@@ -471,7 +471,7 @@ export function CompanyAccess() {
                   {PERMISSION_KEYS.map((permissionKey) => (
                     <label
                       key={permissionKey}
-                      className="flex items-start gap-3 rounded-lg border border-border px-3 py-2"
+                      className="flex items-start gap-3 rounded-none border border-border px-3 py-2"
                     >
                       <Checkbox
                         checked={draftGrants.has(permissionKey)}
@@ -536,7 +536,7 @@ export function CompanyAccess() {
           </DialogHeader>
           {removingMember && (
             <div className="space-y-5">
-              <div className="rounded-lg border border-border px-3 py-3">
+              <div className="rounded-none border border-border px-3 py-3">
                 <div className="text-sm font-medium">{memberDisplayName(removingMember)}</div>
                 <div className="text-sm text-muted-foreground">{removingMember.user?.email || removingMember.principalId}</div>
                 <div className="mt-2 text-sm text-muted-foreground">
@@ -574,7 +574,7 @@ export function CompanyAccess() {
                       </optgroup>
                     ) : null}
                   </select>
-                  <div className="max-h-36 overflow-auto rounded-lg border border-border">
+                  <div className="max-h-36 overflow-auto rounded-none border border-border">
                     {assignedIssues.slice(0, 6).map((issue) => (
                       <div key={issue.id} className="border-b border-border px-3 py-2 text-sm last:border-b-0">
                         <div className="font-medium">{issue.identifier ?? issue.id.slice(0, 8)}</div>
@@ -652,7 +652,7 @@ function PendingJoinRequestCard({
   onReject: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border px-4 py-4">
+    <div className="rounded-none border border-border px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <div>

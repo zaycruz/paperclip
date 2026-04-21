@@ -248,12 +248,18 @@ export const StatusBadge = createSdkUiComponent<StatusBadgeProps>("StatusBadge")
 /**
  * Sortable, paginated data table.
  *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
+ *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
 export const DataTable = createSdkUiComponent<DataTableProps>("DataTable");
 
 /**
  * Line or bar chart for time-series data.
+ *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
  *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
@@ -262,12 +268,18 @@ export const TimeseriesChart = createSdkUiComponent<TimeseriesChartProps>("Times
 /**
  * Renders Markdown text as HTML.
  *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
+ *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
 export const MarkdownBlock = createSdkUiComponent<MarkdownBlockProps>("MarkdownBlock");
 
 /**
  * Renders a definition-list of label/value pairs.
+ *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
  *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
@@ -276,12 +288,18 @@ export const KeyValueList = createSdkUiComponent<KeyValueListProps>("KeyValueLis
 /**
  * Row of action buttons wired to the plugin bridge's `performAction` handlers.
  *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
+ *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
 export const ActionBar = createSdkUiComponent<ActionBarProps>("ActionBar");
 
 /**
  * Scrollable, timestamped log output viewer.
+ *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
  *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
@@ -290,12 +308,18 @@ export const LogView = createSdkUiComponent<LogViewProps>("LogView");
 /**
  * Collapsible JSON tree for debugging or raw data inspection.
  *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
+ *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
 export const JsonTree = createSdkUiComponent<JsonTreeProps>("JsonTree");
 
 /**
  * Loading indicator.
+ *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
  *
  * @see PLUGIN_SPEC.md §19.6 — Shared Components
  */
@@ -304,6 +328,9 @@ export const Spinner = createSdkUiComponent<SpinnerProps>("Spinner");
 /**
  * React error boundary that prevents plugin rendering errors from crashing
  * the host page.
+ *
+ * @status contract-only
+ * Not yet implemented — will fail at runtime if rendered. See doc/design-system/components/index.md for roadmap status.
  *
  * @see PLUGIN_SPEC.md §19.7 — Error Propagation Through The Bridge
  */

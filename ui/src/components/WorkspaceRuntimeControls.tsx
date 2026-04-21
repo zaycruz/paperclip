@@ -256,7 +256,7 @@ function CommandActionButtons({
             size="sm"
             className={cn(
               "h-9 w-full justify-start px-3 shadow-none sm:w-auto",
-              square ? "rounded-none" : "rounded-xl",
+              square ? "rounded-none" : "rounded-none",
               action === "restart" ? "bg-background" : null,
             )}
             disabled={disabled}
@@ -299,14 +299,14 @@ function CommandSection({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       {items.length === 0 ? (
-        <div className={cn("border border-dashed border-border/80 bg-background px-3 py-4 text-sm text-muted-foreground", square ? "rounded-none" : "rounded-xl")}>
+        <div className={cn("border border-dashed border-border/80 bg-background px-3 py-4 text-sm text-muted-foreground", square ? "rounded-none" : "rounded-none")}>
           {emptyMessage}
           {disabledHint ? <p className="mt-2 text-xs">{disabledHint}</p> : null}
         </div>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
-            <div key={item.key} className={cn("border border-border/80 bg-background px-3 py-3", square ? "rounded-none" : "rounded-xl")}>
+            <div key={item.key} className={cn("border border-border/80 bg-background px-3 py-3", square ? "rounded-none" : "rounded-none")}>
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-1">
@@ -388,7 +388,7 @@ export function WorkspaceRuntimeControls({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className={cn("border border-border/70 bg-background p-3", square ? "rounded-none" : "rounded-xl")}>
+      <div className={cn("border border-border/70 bg-background p-3", square ? "rounded-none" : "rounded-none")}>
         <div className="space-y-1">
           <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Workspace commands</div>
           <div className="flex flex-wrap items-center gap-2">

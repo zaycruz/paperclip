@@ -416,7 +416,7 @@ function IssueChatFallbackThread({
 }) {
   return (
     <div className={cn(variant === "embedded" ? "space-y-3" : "space-y-4")}>
-      <div className="rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
+      <div className="rounded-none border border-amber-300/60 bg-amber-50/80 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-200">
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div className="space-y-1">
@@ -432,7 +432,7 @@ function IssueChatFallbackThread({
         <div className={cn(
           "text-center text-sm text-muted-foreground",
           variant === "embedded"
-            ? "rounded-xl border border-dashed border-border/70 bg-background/60 px-4 py-6"
+            ? "rounded-none border border-dashed border-border/70 bg-background/60 px-4 py-6"
             : "rounded-2xl border border-dashed border-border bg-card px-6 py-10",
         )}>
           {emptyMessage}
@@ -442,7 +442,7 @@ function IssueChatFallbackThread({
           {messages.map((message) => {
             const lines = fallbackTextParts(message);
             return (
-              <div key={message.id} className="rounded-xl border border-border/60 bg-card/70 px-4 py-3">
+              <div key={message.id} className="rounded-none border border-border/60 bg-card/70 px-4 py-3">
                 <div className="mb-2 flex items-center gap-2 text-sm">
                   <span className="font-medium text-foreground">{fallbackAuthorLabel(message)}</span>
                   {message.createdAt ? (
@@ -712,7 +712,7 @@ function IssueChatChainOfThought({
     <div>
       <button
         type="button"
-        className="group flex w-full items-center gap-2.5 rounded-lg px-1 py-2 text-left transition-colors hover:bg-accent/5"
+        className="group flex w-full items-center gap-2.5 rounded-none px-1 py-2 text-left transition-colors hover:bg-accent/5"
         onClick={() => hasContent && setExpanded((v) => !v)}
       >
         <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
@@ -1364,7 +1364,7 @@ function IssueChatAssistantMessage({ message }: { message: ThreadMessage }) {
               <div className="space-y-3">
                 <IssueChatAssistantParts message={message} hasCoT={hasCoT} />
                 {message.content.length === 0 && waitingText ? (
-                  <div className="flex items-center gap-2.5 rounded-lg px-1 py-2">
+                  <div className="flex items-center gap-2.5 rounded-none px-1 py-2">
                     <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground/80">
                       {agentIcon ? (
                         <AgentIcon icon={agentIcon} className="h-4 w-4 shrink-0" />
@@ -2347,7 +2347,7 @@ export function IssueChatThread({
                 <div className={cn(
                   "text-center text-sm text-muted-foreground",
                   variant === "embedded"
-                    ? "rounded-xl border border-dashed border-border/70 bg-background/60 px-4 py-6"
+                    ? "rounded-none border border-dashed border-border/70 bg-background/60 px-4 py-6"
                     : "rounded-2xl border border-dashed border-border bg-card px-6 py-10",
                 )}>
                   {resolvedEmptyMessage}

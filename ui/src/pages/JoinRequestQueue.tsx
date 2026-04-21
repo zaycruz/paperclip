@@ -85,7 +85,7 @@ export function JoinRequestQueue() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap gap-3 rounded-none border border-border bg-card p-4">
         <label className="space-y-2 text-sm">
           <span className="font-medium">Status</span>
           <select
@@ -118,12 +118,12 @@ export function JoinRequestQueue() {
 
       <div className="space-y-4">
         {(requestsQuery.data ?? []).length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
+          <div className="rounded-none border border-dashed border-border px-4 py-8 text-sm text-muted-foreground">
             No join requests match the current filters.
           </div>
         ) : (
           requestsQuery.data!.map((request) => (
-            <div key={request.id} className="rounded-xl border border-border bg-card p-4">
+            <div key={request.id} className="rounded-none border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -167,7 +167,7 @@ export function JoinRequestQueue() {
               </div>
 
               <div className="mt-4 grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
-                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <div className="rounded-none border border-border bg-background px-3 py-2">
                   <div className="text-xs font-medium uppercase tracking-wide">Invite context</div>
                   <div className="mt-2">
                     {request.invite
@@ -178,7 +178,7 @@ export function JoinRequestQueue() {
                     <div className="mt-2 text-foreground">{request.invite.inviteMessage}</div>
                   ) : null}
                 </div>
-                <div className="rounded-lg border border-border bg-background px-3 py-2">
+                <div className="rounded-none border border-border bg-background px-3 py-2">
                   <div className="text-xs font-medium uppercase tracking-wide">Request details</div>
                   <div className="mt-2">Submitted {new Date(request.createdAt).toLocaleString()}</div>
                   <div>Source IP {request.requestIp}</div>

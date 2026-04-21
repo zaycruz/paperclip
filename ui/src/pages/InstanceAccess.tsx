@@ -110,7 +110,7 @@ export function InstanceAccess() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="space-y-4 rounded-xl border border-border bg-card p-4">
+        <section className="space-y-4 rounded-none border border-border bg-card p-4">
           <label className="block space-y-2 text-sm">
             <span className="font-medium">Search users</span>
             <input
@@ -126,7 +126,7 @@ export function InstanceAccess() {
                 key={user.id}
                 type="button"
                 onClick={() => setSelectedUserId(user.id)}
-                className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
+                className={`w-full rounded-none border px-3 py-3 text-left transition-colors ${
                   user.id === selectedUserId
                     ? "border-foreground bg-accent"
                     : "border-border hover:bg-accent/40"
@@ -149,7 +149,7 @@ export function InstanceAccess() {
           </div>
         </section>
 
-        <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+        <section className="space-y-4 rounded-none border border-border bg-card p-5">
           {!selectedUserId ? (
             <div className="text-sm text-muted-foreground">Select a user to inspect instance access.</div>
           ) : userAccessQuery.isLoading ? (
@@ -189,7 +189,7 @@ export function InstanceAccess() {
                   {companies.map((company) => (
                     <label
                       key={company.id}
-                      className="flex items-start gap-3 rounded-lg border border-border px-3 py-3"
+                      className="flex items-start gap-3 rounded-none border border-border px-3 py-3"
                     >
                       <Checkbox
                         checked={selectedCompanyIds.has(company.id)}
@@ -225,7 +225,7 @@ export function InstanceAccess() {
                   {(userAccessQuery.data?.companyAccess ?? []).map((membership) => (
                     <div
                       key={membership.id}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                      className="flex items-center justify-between rounded-none border border-border px-3 py-2 text-sm"
                     >
                       <div>
                         <div className="font-medium">{membership.companyName || membership.companyId}</div>

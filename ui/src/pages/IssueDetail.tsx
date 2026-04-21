@@ -283,7 +283,7 @@ function IssueSectionSkeleton({
   rows?: number;
 }) {
   return (
-    <div className="space-y-3 rounded-lg border border-border p-3">
+    <div className="space-y-3 rounded-none border border-border p-3">
       <Skeleton className={cn("h-4", titleWidth)} />
       <div className="space-y-2">
         {Array.from({ length: rows }).map((_, index) => (
@@ -296,7 +296,7 @@ function IssueSectionSkeleton({
 
 function IssueChatSkeleton() {
   return (
-    <div className="space-y-3 rounded-lg border border-border p-3">
+    <div className="space-y-3 rounded-none border border-border p-3">
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Skeleton className="h-8 w-8 rounded-full" />
@@ -305,7 +305,7 @@ function IssueChatSkeleton() {
             <Skeleton className="h-3 w-16" />
           </div>
         </div>
-        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-none" />
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-end gap-2">
@@ -315,11 +315,11 @@ function IssueChatSkeleton() {
           </div>
           <Skeleton className="h-8 w-8 rounded-full" />
         </div>
-        <Skeleton className="ml-auto h-16 w-[85%] rounded-xl" />
+        <Skeleton className="ml-auto h-16 w-[85%] rounded-none" />
       </div>
       <div className="space-y-2 border-t border-border pt-3">
         <Skeleton className="h-3 w-28" />
-        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-none" />
       </div>
     </div>
   );
@@ -391,7 +391,7 @@ function IssueDetailLoadingState({
         )}
       </div>
 
-      <Skeleton className="h-28 w-full rounded-lg border border-border" />
+      <Skeleton className="h-28 w-full rounded-none border border-border" />
 
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -876,7 +876,7 @@ function IssueDetailActivityTab({
         </div>
       )}
       {linkedRuns && linkedRuns.length > 0 && (
-        <div className="mb-3 px-3 py-2 rounded-lg border border-border">
+        <div className="mb-3 px-3 py-2 rounded-none border border-border">
           <div className="text-sm font-medium text-muted-foreground mb-1">Cost Summary</div>
           {!issueCostSummary.hasCost && !issueCostSummary.hasTokens ? (
             <div className="text-xs text-muted-foreground">No cost data yet.</div>
@@ -904,7 +904,7 @@ function IssueDetailActivityTab({
       ) : (
         <div className="space-y-1.5">
           {activity.slice(0, 20).map((evt) => (
-            <div key={evt.id} className="space-y-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+            <div key={evt.id} className="space-y-1.5 rounded-none border border-border/60 px-3 py-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
                 <ActorIdentity evt={evt} agentMap={agentMap} userProfileMap={userProfileMap} />
                 <span>{formatIssueActivityAction(evt.action, evt.details, { agentMap, userProfileMap, currentUserId })}</span>
@@ -2526,7 +2526,7 @@ export function IssueDetail() {
           entityType: "issue",
         }}
         className="space-y-3"
-        itemClassName="rounded-lg border border-border p-3"
+        itemClassName="rounded-none border border-border p-3"
         missingBehavior="placeholder"
       />
 
@@ -2588,7 +2588,7 @@ export function IssueDetail() {
       ) : hasAttachments ? (
         <div
         className={cn(
-          "space-y-3 rounded-lg transition-colors",
+          "space-y-3 rounded-none transition-colors",
         )}
         onDragEnter={(evt) => {
           evt.preventDefault();
@@ -2618,7 +2618,7 @@ export function IssueDetail() {
             {imageAttachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-accent/10 cursor-pointer"
+                className="group relative aspect-square rounded-none overflow-hidden border border-border bg-accent/10 cursor-pointer"
                 onClick={() => {
                   const idx = imageAttachments.findIndex((a) => a.id === attachment.id);
                   setGalleryIndex(idx >= 0 ? idx : 0);

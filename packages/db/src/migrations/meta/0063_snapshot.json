@@ -148,7 +148,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "activity_log_agent_id_agents_id_fk": {

@@ -54,7 +54,9 @@ export const memoryExtractionJobs = pgTable(
     error: text("error"),
     sourceKind: text("source_kind").$type<MemoryExtractionJobSourceKind>().notNull(),
     sourceRefJson: jsonb("source_ref_json").$type<Record<string, unknown>>(),
-    retryOfJobId: uuid("retry_of_job_id").references((): AnyPgColumn => memoryExtractionJobs.id),
+    retryOfJobId: uuid("retry_of_job_id").references((): AnyPgColumn => memoryExtractionJobs.id, {
+      onDelete: "set null",
+    }),
     attemptNumber: integer("attempt_number").notNull().default(1),
     dispatcherKind: text("dispatcher_kind")
       .$type<MemoryExtractionJobDispatcherKind>()

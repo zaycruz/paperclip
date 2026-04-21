@@ -44,6 +44,10 @@ const mockInstanceSettingsService = vi.hoisted(() => ({
 const mockRoutineService = vi.hoisted(() => ({
   syncRunStatusForIssue: vi.fn(async () => undefined),
 }));
+const mockIssueThreadInteractionService = vi.hoisted(() => ({
+  expireRequestConfirmationsSupersededByComment: vi.fn(async () => []),
+  expireStaleRequestConfirmationsForIssueDocument: vi.fn(async () => []),
+}));
 
 const planDocument = {
   id: "document-1",
@@ -127,6 +131,7 @@ function registerModuleMocks() {
       syncIssue: async () => undefined,
     }),
     issueService: () => mockIssueService,
+    issueThreadInteractionService: () => mockIssueThreadInteractionService,
     logActivity: mockLogActivity,
     projectService: () => ({}),
     routineService: () => mockRoutineService,

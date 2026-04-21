@@ -34,6 +34,10 @@ const mockInstanceSettingsService = vi.hoisted(() => ({
   })),
   listCompanyIds: vi.fn(async () => ["company-1"]),
 }));
+const mockIssueThreadInteractionService = vi.hoisted(() => ({
+  expireRequestConfirmationsSupersededByComment: vi.fn(async () => []),
+  expireStaleRequestConfirmationsForIssueDocument: vi.fn(async () => []),
+}));
 
 function registerModuleMocks() {
   vi.doMock("@paperclipai/shared/telemetry", () => ({
@@ -93,6 +97,7 @@ function registerModuleMocks() {
       syncIssue: async () => undefined,
     }),
     issueService: () => mockIssueService,
+    issueThreadInteractionService: () => mockIssueThreadInteractionService,
     logActivity: mockLogActivity,
     projectService: () => ({}),
     routineService: () => ({ syncRunStatusForIssue: vi.fn(async () => undefined) }),

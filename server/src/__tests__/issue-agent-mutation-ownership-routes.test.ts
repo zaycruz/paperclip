@@ -52,6 +52,10 @@ const mockStorageService = vi.hoisted(() => ({
   headObject: vi.fn(),
   deleteObject: vi.fn(),
 }));
+const mockIssueThreadInteractionService = vi.hoisted(() => ({
+  expireRequestConfirmationsSupersededByComment: vi.fn(async () => []),
+  expireStaleRequestConfirmationsForIssueDocument: vi.fn(async () => []),
+}));
 
 function registerRouteMocks() {
   vi.doMock("@paperclipai/shared/telemetry", () => ({
@@ -129,6 +133,7 @@ function registerRouteMocks() {
       syncIssue: async () => undefined,
     }),
     issueService: () => mockIssueService,
+    issueThreadInteractionService: () => mockIssueThreadInteractionService,
     logActivity: vi.fn(async () => undefined),
     projectService: () => ({}),
     routineService: () => ({

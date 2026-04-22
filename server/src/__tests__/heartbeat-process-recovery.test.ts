@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
-import { eq, or, inArray } from "drizzle-orm";
+import { and, eq, or, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
@@ -529,6 +529,87 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     return { companyId, agentId, runId, wakeupRequestId, issueId };
   }
 
+  async function expectStrandedRecoveryArtifacts(input: {
+    companyId: string;
+    agentId: string;
+    issueId: string;
+    runId: string;
+    previousStatus: "todo" | "in_progress";
+    retryReason: "assignment_recovery" | "issue_continuation_needed";
+  }) {
+    const recovery = await waitForValue(async () =>
+      db.select().from(issues).where(
+        and(
+          eq(issues.companyId, input.companyId),
+          eq(issues.originKind, "stranded_issue_recovery"),
+          eq(issues.originId, input.issueId),
+        ),
+      ).then((rows) => rows[0] ?? null),
+    );
+    if (!recovery) throw new Error("Expected stranded issue recovery issue to be created");
+
+    expect(recovery).toMatchObject({
+      companyId: input.companyId,
+      parentId: input.issueId,
+      assigneeAgentId: input.agentId,
+      originKind: "stranded_issue_recovery",
+      originId: input.issueId,
+      originRunId: input.runId,
+      priority: "medium",
+    });
+    expect(recovery.title).toContain("Recover stalled issue");
+    expect(recovery.description).toContain(`Previous source status: \`${input.previousStatus}\``);
+    expect(recovery.description).toContain(`Retry reason: \`${input.retryReason}\``);
+    expect(recovery.description).toContain("Fix the runtime/adapter problem");
+
+    const relation = await db
+      .select()
+      .from(issueRelations)
+      .where(
+        and(
+          eq(issueRelations.companyId, input.companyId),
+          eq(issueRelations.issueId, recovery.id),
+          eq(issueRelations.relatedIssueId, input.issueId),
+          eq(issueRelations.type, "blocks"),
+        ),
+      )
+      .then((rows) => rows[0] ?? null);
+    expect(relation).toBeTruthy();
+
+    const wakeups = await db
+      .select()
+      .from(agentWakeupRequests)
+      .where(eq(agentWakeupRequests.agentId, input.agentId));
+    const recoveryWakeup = wakeups.find((wakeup) => {
+      const payload = wakeup.payload as Record<string, unknown> | null;
+      return payload?.issueId === recovery.id &&
+        payload?.sourceIssueId === input.issueId &&
+        payload?.strandedRunId === input.runId;
+    });
+    expect(recoveryWakeup).toMatchObject({
+      companyId: input.companyId,
+      reason: "issue_assigned",
+      source: "assignment",
+    });
+
+    const recoveryRun = recoveryWakeup?.runId
+      ? await db
+        .select()
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, recoveryWakeup.runId))
+        .then((rows) => rows[0] ?? null)
+      : null;
+    expect(recoveryRun?.contextSnapshot).toMatchObject({
+      issueId: recovery.id,
+      taskId: recovery.id,
+      source: "stranded_issue_recovery",
+      sourceIssueId: input.issueId,
+      strandedRunId: input.runId,
+    });
+
+    return recovery;
+  }
+
   async function seedQueuedIssueRunFixture() {
     const companyId = randomUUID();
     const agentId = randomUUID();
@@ -892,7 +973,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("blocks assigned todo work after the one automatic dispatch recovery was already used", async () => {
-    const { issueId } = await seedStrandedIssueFixture({
+    const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
       status: "todo",
       runStatus: "failed",
       retryReason: "assignment_recovery",
@@ -907,10 +988,20 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0] ?? null);
     expect(issue?.status).toBe("blocked");
 
+    const recovery = await expectStrandedRecoveryArtifacts({
+      companyId,
+      agentId,
+      issueId,
+      runId,
+      previousStatus: "todo",
+      retryReason: "assignment_recovery",
+    });
+
     const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, issueId));
     expect(comments).toHaveLength(1);
     expect(comments[0]?.body).toContain("retried dispatch");
     expect(comments[0]?.body).toContain("Latest retry failure: `process_lost` - run failed before issue advanced.");
+    expect(comments[0]?.body).toContain(`Recovery issue: [${recovery.identifier}]`);
   });
 
   it("assigns open unassigned blockers back to their creator agent", async () => {
@@ -1197,7 +1288,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     expect(wakes.some((row) => row.reason === "run_liveness_continuation")).toBe(false);
   });
   it("blocks stranded in-progress work after the continuation retry was already used", async () => {
-    const { issueId } = await seedStrandedIssueFixture({
+    const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
       status: "in_progress",
       runStatus: "failed",
       retryReason: "issue_continuation_needed",
@@ -1212,10 +1303,20 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const issue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0] ?? null);
     expect(issue?.status).toBe("blocked");
 
+    const recovery = await expectStrandedRecoveryArtifacts({
+      companyId,
+      agentId,
+      issueId,
+      runId,
+      previousStatus: "in_progress",
+      retryReason: "issue_continuation_needed",
+    });
+
     const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, issueId));
     expect(comments).toHaveLength(1);
     expect(comments[0]?.body).toContain("retried continuation");
     expect(comments[0]?.body).toContain("Latest retry failure: `process_lost` - run failed before issue advanced.");
+    expect(comments[0]?.body).toContain(`Recovery issue: [${recovery.identifier}]`);
   });
 
   it("re-enqueues continuation when the latest automatic continuation succeeded without closing the issue", async () => {

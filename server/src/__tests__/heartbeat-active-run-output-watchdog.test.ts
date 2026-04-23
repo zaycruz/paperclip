@@ -15,6 +15,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import {
+  ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS,
   ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS,
   ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS,
   heartbeatService,
@@ -350,6 +351,58 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
       snoozedUntil,
       evaluationIssueId,
     });
+  });
+
+  it("re-arms continue decisions after the default quiet window", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const { companyId, managerId, runId } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+    });
+    const heartbeat = heartbeatService(db);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn() });
+
+    const scan = await heartbeat.scanSilentActiveRuns({ now, companyId });
+    const evaluationIssueId = scan.evaluationIssueIds[0];
+    expect(evaluationIssueId).toBeTruthy();
+
+    const decision = await recovery.recordWatchdogDecision({
+      runId,
+      actor: { type: "agent", agentId: managerId },
+      decision: "continue",
+      evaluationIssueId,
+      reason: "Current evidence is acceptable; keep watching.",
+      now,
+    });
+    const rearmAt = new Date(now.getTime() + ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS);
+    expect(decision).toMatchObject({
+      runId,
+      evaluationIssueId,
+      decision: "continue",
+      createdByAgentId: managerId,
+    });
+    expect(decision.snoozedUntil?.toISOString()).toBe(rearmAt.toISOString());
+
+    await db.update(issues).set({ status: "done" }).where(eq(issues.id, evaluationIssueId));
+
+    const beforeRearm = await heartbeat.scanSilentActiveRuns({
+      now: new Date(rearmAt.getTime() - 60_000),
+      companyId,
+    });
+    expect(beforeRearm).toMatchObject({ created: 0, snoozed: 1 });
+
+    const afterRearm = await heartbeat.scanSilentActiveRuns({
+      now: new Date(rearmAt.getTime() + 60_000),
+      companyId,
+    });
+    expect(afterRearm.created).toBe(1);
+    expect(afterRearm.evaluationIssueIds[0]).not.toBe(evaluationIssueId);
+
+    const evaluations = await db
+      .select()
+      .from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "stale_active_run_evaluation")));
+    expect(evaluations.filter((issue) => !["done", "cancelled"].includes(issue.status))).toHaveLength(1);
   });
 
   it("rejects agent watchdog decisions using issues not bound to the target run", async () => {

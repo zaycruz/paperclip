@@ -244,9 +244,11 @@ Suspicious silence creates a medium-priority review issue for the selected recov
 
 Watchdog decisions are explicit operator/recovery-owner decisions:
 
-- `snooze` records a future quiet-until time and suppresses scan-created review work during that window
-- `continue` records that the current evidence is acceptable but does not cancel or mutate the active run
+- `snooze` records an operator-chosen future quiet-until time and suppresses scan-created review work during that window
+- `continue` records that the current evidence is acceptable, does not cancel or mutate the active run, and sets a 30-minute default re-arm window before the watchdog evaluates the still-silent run again
 - `dismissed_false_positive` records why the review was not actionable
+
+Operators should prefer `snooze` for known time-bounded quiet periods. `continue` is only a short acknowledgement of the current evidence; if the run remains silent after the re-arm window, the periodic watchdog scan can create or update review work again.
 
 The board can record watchdog decisions. The assigned owner of the watchdog evaluation issue can also record them. Other agents cannot.
 

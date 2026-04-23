@@ -15,6 +15,7 @@ import { runningProcesses } from "../../adapters/index.js";
 import { forbidden, notFound } from "../../errors.js";
 import { logger } from "../../middleware/logger.js";
 import { redactCurrentUserText } from "../../log-redaction.js";
+import { redactSensitiveText } from "../../redaction.js";
 import { logActivity } from "../activity-log.js";
 import { budgetService } from "../budgets.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -62,8 +63,8 @@ type LatestIssueRun = Pick<
 > | null;
 
 type WatchdogDecisionActor =
-  | { type: "board"; userId?: string | null }
-  | { type: "agent"; agentId?: string | null }
+  | { type: "board"; userId?: string | null; runId?: string | null }
+  | { type: "agent"; agentId?: string | null; runId?: string | null }
   | { type: "none" };
 
 export type RunOutputSilenceSummary = {
@@ -589,11 +590,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
   }
 
   function redactWatchdogEvidenceText(value: string, currentUserRedactionOptions: Awaited<ReturnType<typeof getCurrentUserRedactionOptions>>) {
-    return redactCurrentUserText(value, currentUserRedactionOptions)
-      .replace(/\b(sk-[a-zA-Z0-9_-]{12,})\b/g, "[REDACTED_API_KEY]")
-      .replace(/\b([A-Za-z0-9_]*TOKEN[A-Za-z0-9_]*\s*=\s*)[^\s]+/gi, "$1[REDACTED]")
-      .replace(/\b([A-Za-z0-9_]*KEY[A-Za-z0-9_]*\s*=\s*)[^\s]+/gi, "$1[REDACTED]")
-      .replace(/\b([A-Za-z0-9_]*SECRET[A-Za-z0-9_]*\s*=\s*)[^\s]+/gi, "$1[REDACTED]");
+    return redactSensitiveText(redactCurrentUserText(value, currentUserRedactionOptions));
   }
 
   function truncateEvidenceText(value: string, maxChars = 4000) {
@@ -1029,13 +1026,25 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       .limit(1);
     if (!run) throw notFound("Heartbeat run not found");
 
-    let evaluationIssue: { id: string; assigneeAgentId: string | null; companyId: string } | null = null;
+    let evaluationIssue: {
+      id: string;
+      assigneeAgentId: string | null;
+      companyId: string;
+      originKind: string;
+      originId: string | null;
+      hiddenAt: Date | null;
+      status: string;
+    } | null = null;
     if (input.evaluationIssueId) {
       evaluationIssue = await db
         .select({
           id: issues.id,
           assigneeAgentId: issues.assigneeAgentId,
           companyId: issues.companyId,
+          originKind: issues.originKind,
+          originId: issues.originId,
+          hiddenAt: issues.hiddenAt,
+          status: issues.status,
         })
         .from(issues)
         .where(and(eq(issues.id, input.evaluationIssueId), eq(issues.companyId, run.companyId)))
@@ -1047,9 +1056,43 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     const assignedRecoveryOwner =
       input.actor.type === "agent" &&
       Boolean(input.actor.agentId) &&
+      evaluationIssue !== null &&
+      evaluationIssue.originKind === STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND &&
+      evaluationIssue.originId === run.id &&
+      evaluationIssue.hiddenAt === null &&
+      !["done", "cancelled"].includes(evaluationIssue.status) &&
       evaluationIssue?.assigneeAgentId === input.actor.agentId;
     if (!boardActor && !assignedRecoveryOwner) {
       throw forbidden("Only the board or the assigned recovery owner can record watchdog decisions");
+    }
+
+    if (evaluationIssue && (
+      evaluationIssue.originKind !== STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND ||
+      evaluationIssue.originId !== run.id
+    )) {
+      throw forbidden("Watchdog decision evaluation issue is not bound to the target run");
+    }
+
+    if (input.actor.type === "agent" && !evaluationIssue) {
+      throw forbidden("Agent watchdog decisions require the target evaluation issue");
+    }
+
+    const createdByRunId = input.actor.type === "agent"
+      ? input.actor.runId ?? input.createdByRunId ?? null
+      : input.actor.type === "board"
+        ? input.actor.runId ?? input.createdByRunId ?? null
+        : null;
+    if (createdByRunId) {
+      const [creatorRun] = await db
+        .select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId })
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, createdByRunId))
+        .limit(1);
+      const sameCompany = creatorRun?.companyId === run.companyId;
+      const sameAgent = input.actor.type !== "agent" || creatorRun?.agentId === input.actor.agentId;
+      if (!creatorRun || !sameCompany || !sameAgent) {
+        throw forbidden("createdByRunId is not valid for this watchdog decision actor");
+      }
     }
 
     const [row] = await db
@@ -1063,7 +1106,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
         reason: input.reason ?? null,
         createdByAgentId: input.actor.type === "agent" ? input.actor.agentId ?? null : null,
         createdByUserId: input.actor.type === "board" ? input.actor.userId ?? null : null,
-        createdByRunId: input.createdByRunId ?? null,
+        createdByRunId,
       })
       .returning();
 

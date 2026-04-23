@@ -2622,7 +2622,7 @@ export function agentRoutes(db: Db) {
       evaluationIssueId,
       reason,
       snoozedUntil,
-      createdByRunId: typeof req.body?.createdByRunId === "string" ? req.body.createdByRunId : null,
+      createdByRunId: req.actor.runId ?? null,
     });
 
     res.json(row);

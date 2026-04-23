@@ -20,6 +20,7 @@ import {
   heartbeatService,
 } from "../services/heartbeat.ts";
 import { recoveryService } from "../services/recovery/service.ts";
+import { getRunLogStore } from "../services/run-log-store.ts";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -92,7 +93,7 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
     await tempDb?.cleanup();
   });
 
-  async function seedRunningRun(opts: { now: Date; ageMs: number; withOutput?: boolean }) {
+  async function seedRunningRun(opts: { now: Date; ageMs: number; withOutput?: boolean; logChunk?: string }) {
     const companyId = randomUUID();
     const managerId = randomUUID();
     const coderId = randomUUID();
@@ -161,6 +162,23 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
       stdoutExcerpt: "OPENAI_API_KEY=sk-test-secret-value should not leak",
       logBytes: 0,
     });
+    if (opts.logChunk) {
+      const store = getRunLogStore();
+      const handle = await store.begin({ companyId, agentId: coderId, runId });
+      const logBytes = await store.append(handle, {
+        stream: "stdout",
+        chunk: opts.logChunk,
+        ts: startedAt.toISOString(),
+      });
+      await db
+        .update(heartbeatRuns)
+        .set({
+          logStore: handle.store,
+          logRef: handle.logRef,
+          logBytes,
+        })
+        .where(eq(heartbeatRuns.id, runId));
+    }
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     return { companyId, managerId, coderId, issueId, runId, issuePrefix };
   }
@@ -194,6 +212,34 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
     });
     expect(evaluations[0]?.description).toContain("Decision Checklist");
     expect(evaluations[0]?.description).not.toContain("sk-test-secret-value");
+  });
+
+  it("redacts sensitive values from actual run-log evidence", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const leakedJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    const leakedGithubToken = "ghp_1234567890abcdefghijklmnopqrstuvwxyz";
+    const { companyId } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+      logChunk: [
+        "Authorization: Bearer live-bearer-token-value",
+        `POST payload {"apiKey":"json-secret-value","token":"${leakedJwt}"}`,
+        `GITHUB_TOKEN=${leakedGithubToken}`,
+      ].join("\n"),
+    });
+    const heartbeat = heartbeatService(db);
+
+    await heartbeat.scanSilentActiveRuns({ now, companyId });
+
+    const [evaluation] = await db
+      .select()
+      .from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "stale_active_run_evaluation")));
+    expect(evaluation?.description).toContain("***REDACTED***");
+    expect(evaluation?.description).not.toContain("live-bearer-token-value");
+    expect(evaluation?.description).not.toContain("json-secret-value");
+    expect(evaluation?.description).not.toContain(leakedJwt);
+    expect(evaluation?.description).not.toContain(leakedGithubToken);
   });
 
   it("raises critical stale-run evaluations and blocks the source issue", async () => {
@@ -304,5 +350,147 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
       snoozedUntil,
       evaluationIssueId,
     });
+  });
+
+  it("rejects agent watchdog decisions using issues not bound to the target run", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const { companyId, managerId, coderId, runId, issuePrefix } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+    });
+    const heartbeat = heartbeatService(db);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn() });
+
+    const scan = await heartbeat.scanSilentActiveRuns({ now, companyId });
+    const evaluationIssueId = scan.evaluationIssueIds[0];
+    expect(evaluationIssueId).toBeTruthy();
+
+    const unrelatedIssueId = randomUUID();
+    await db.insert(issues).values({
+      id: unrelatedIssueId,
+      companyId,
+      title: "Assigned but unrelated",
+      status: "todo",
+      priority: "medium",
+      assigneeAgentId: managerId,
+      issueNumber: 20,
+      identifier: `${issuePrefix}-20`,
+    });
+
+    const otherRunId = randomUUID();
+    const otherEvaluationIssueId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: otherRunId,
+      companyId,
+      agentId: coderId,
+      status: "running",
+      invocationSource: "assignment",
+      triggerDetail: "system",
+      startedAt: new Date(now.getTime() - ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS - 120_000),
+      processStartedAt: new Date(now.getTime() - ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS - 120_000),
+      lastOutputAt: null,
+      lastOutputSeq: 0,
+      lastOutputStream: null,
+      contextSnapshot: {},
+      logBytes: 0,
+    });
+    await db.insert(issues).values({
+      id: otherEvaluationIssueId,
+      companyId,
+      title: "Other run evaluation",
+      status: "todo",
+      priority: "medium",
+      assigneeAgentId: managerId,
+      issueNumber: 21,
+      identifier: `${issuePrefix}-21`,
+      originKind: "stale_active_run_evaluation",
+      originId: otherRunId,
+      originFingerprint: `stale_active_run:${companyId}:${otherRunId}`,
+    });
+
+    const attempts = [
+      { decision: "continue" as const, evaluationIssueId: unrelatedIssueId },
+      { decision: "dismissed_false_positive" as const, evaluationIssueId: unrelatedIssueId },
+      {
+        decision: "snooze" as const,
+        evaluationIssueId: unrelatedIssueId,
+        snoozedUntil: new Date(now.getTime() + 60 * 60 * 1000),
+      },
+      { decision: "continue" as const, evaluationIssueId: otherEvaluationIssueId },
+    ];
+
+    for (const attempt of attempts) {
+      await expect(
+        recovery.recordWatchdogDecision({
+          runId,
+          actor: { type: "agent", agentId: managerId },
+          reason: "malicious or stale binding",
+          ...attempt,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+    }
+
+    await db.update(issues).set({ status: "done" }).where(eq(issues.id, evaluationIssueId));
+    await expect(
+      recovery.recordWatchdogDecision({
+        runId,
+        actor: { type: "agent", agentId: managerId },
+        decision: "continue",
+        evaluationIssueId,
+        reason: "closed evaluation should not authorize",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("validates createdByRunId before storing watchdog decisions", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const { companyId, managerId, runId } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+    });
+    const heartbeat = heartbeatService(db);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn() });
+
+    const scan = await heartbeat.scanSilentActiveRuns({ now, companyId });
+    const evaluationIssueId = scan.evaluationIssueIds[0];
+    expect(evaluationIssueId).toBeTruthy();
+
+    await expect(
+      recovery.recordWatchdogDecision({
+        runId,
+        actor: { type: "agent", agentId: managerId },
+        decision: "continue",
+        evaluationIssueId,
+        reason: "client supplied another agent run",
+        createdByRunId: runId,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const managerRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: managerRunId,
+      companyId,
+      agentId: managerId,
+      status: "running",
+      invocationSource: "assignment",
+      triggerDetail: "system",
+      startedAt: now,
+      processStartedAt: now,
+      lastOutputAt: now,
+      lastOutputSeq: 1,
+      lastOutputStream: "stdout",
+      contextSnapshot: {},
+      logBytes: 0,
+    });
+
+    const decision = await recovery.recordWatchdogDecision({
+      runId,
+      actor: { type: "agent", agentId: managerId, runId: managerRunId },
+      decision: "continue",
+      evaluationIssueId,
+      reason: "valid current actor run",
+      createdByRunId: randomUUID(),
+    });
+    expect(decision.createdByRunId).toBe(managerRunId);
   });
 });

@@ -36,6 +36,7 @@ const UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES = ["failed", "cancelled", "ti
 const ISSUE_GRAPH_LIVENESS_AUTO_RECOVERY_MIN_STALE_MS = 24 * 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS = 60 * 60 * 1000;
 export const ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+export const ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS = 30 * 60 * 1000;
 const ACTIVE_RUN_OUTPUT_EVIDENCE_TAIL_BYTES = 8 * 1024;
 const STRANDED_ISSUE_RECOVERY_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.strandedIssueRecovery;
 const STALE_ACTIVE_RUN_EVALUATION_ORIGIN_KIND = RECOVERY_ORIGIN_KINDS.staleActiveRunEvaluation;
@@ -509,7 +510,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     return startedAt ? Math.max(0, now.getTime() - startedAt.getTime()) : null;
   }
 
-  async function latestActiveOutputSnooze(companyId: string, runId: string, now = new Date()) {
+  async function latestActiveOutputQuietUntilDecision(companyId: string, runId: string, now = new Date()) {
     const [row] = await db
       .select()
       .from(heartbeatRunWatchdogDecisions)
@@ -517,7 +518,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
         and(
           eq(heartbeatRunWatchdogDecisions.companyId, companyId),
           eq(heartbeatRunWatchdogDecisions.runId, runId),
-          eq(heartbeatRunWatchdogDecisions.decision, "snooze"),
+          inArray(heartbeatRunWatchdogDecisions.decision, ["snooze", "continue"]),
           gt(heartbeatRunWatchdogDecisions.snoozedUntil, now),
         ),
       )
@@ -557,15 +558,15 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     >,
     now = new Date(),
   ): Promise<RunOutputSilenceSummary> {
-    const [snooze, evaluation] = await Promise.all([
-      latestActiveOutputSnooze(run.companyId, run.id, now),
+    const [quietUntilDecision, evaluation] = await Promise.all([
+      latestActiveOutputQuietUntilDecision(run.companyId, run.id, now),
       findOpenStaleRunEvaluation(run.companyId, run.id),
     ]);
     const silenceStartedAt = silenceStartedAtForRun(run);
     const silenceAgeMs = run.status === "running" ? silenceAgeMsForRun(run, now) : null;
     const level = run.status !== "running"
       ? "not_applicable"
-      : snooze
+      : quietUntilDecision
         ? "snoozed"
         : (silenceAgeMs ?? 0) >= ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS
           ? "critical"
@@ -583,7 +584,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       level,
       suspicionThresholdMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS,
       criticalThresholdMs: ACTIVE_RUN_OUTPUT_CRITICAL_THRESHOLD_MS,
-      snoozedUntil: snooze?.snoozedUntil ?? null,
+      snoozedUntil: quietUntilDecision?.snoozedUntil ?? null,
       evaluationIssueId: evaluation?.id ?? null,
       evaluationIssueIdentifier: evaluation?.identifier ?? null,
     };
@@ -993,7 +994,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     };
 
     for (const run of candidates) {
-      if (await latestActiveOutputSnooze(run.companyId, run.id, now)) {
+      if (await latestActiveOutputQuietUntilDecision(run.companyId, run.id, now)) {
         result.snoozed += 1;
         continue;
       }
@@ -1018,6 +1019,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     reason?: string | null;
     snoozedUntil?: Date | null;
     createdByRunId?: string | null;
+    now?: Date;
   }) {
     const [run] = await db
       .select()
@@ -1095,6 +1097,15 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       }
     }
 
+    const decisionNow = input.now ?? new Date();
+    const effectiveSnoozedUntil = input.decision === "snooze"
+      ? input.snoozedUntil ?? null
+      : input.decision === "continue"
+        ? input.snoozedUntil && input.snoozedUntil > decisionNow
+          ? input.snoozedUntil
+          : new Date(decisionNow.getTime() + ACTIVE_RUN_OUTPUT_CONTINUE_REARM_MS)
+        : null;
+
     const [row] = await db
       .insert(heartbeatRunWatchdogDecisions)
       .values({
@@ -1102,7 +1113,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
         runId: run.id,
         evaluationIssueId: input.evaluationIssueId ?? null,
         decision: input.decision,
-        snoozedUntil: input.snoozedUntil ?? null,
+        snoozedUntil: effectiveSnoozedUntil,
         reason: input.reason ?? null,
         createdByAgentId: input.actor.type === "agent" ? input.actor.agentId ?? null : null,
         createdByUserId: input.actor.type === "board" ? input.actor.userId ?? null : null,
@@ -1127,7 +1138,7 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
         source: "recovery.record_watchdog_decision",
         decision: input.decision,
         evaluationIssueId: input.evaluationIssueId ?? null,
-        snoozedUntil: input.snoozedUntil?.toISOString() ?? null,
+        snoozedUntil: effectiveSnoozedUntil?.toISOString() ?? null,
         reason: input.reason ?? null,
       },
     });

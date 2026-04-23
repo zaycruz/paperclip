@@ -68,3 +68,29 @@ None of these are DS violations; they are deliberate choices that may look like 
 1. **Is the LatestRunCard without a heading clear enough?** Removing the "Live Run"/"Latest Run" heading flattens hierarchy but removes a piece of context. If the smoke test finds it ambiguous, we can restore a minimal inline label without reintroducing the pulse dot or separate link.
 2. **Budget card zero-state.** At 0% utilization the filled div has `width: 0%`, so the track reads as empty. The "0%" label and "$0.00 of $N.NN" text still communicate the state in copy. No minimum-fill treatment was added — that would fake data. Flagging in case the visual impression of "empty track" reads as broken to the smoke test.
 3. **Activity-pill presence.** Current treatment is minimal (dot + text, no pill container). The concept called it a "pill" but meant "status indicator" semantically. If you want more visual presence (padded container, subtle background), say so and I'll iterate. `Aesthetic-Usability Effect` says minimal is probably right here — decoration without function adds noise.
+
+---
+
+## Phase 3a polish — 50/25/25 layout + shadcn tooltips
+
+### Decisions
+
+- **Hero is three zones, not two.** 50/50 still felt crowded in the right column because budget card + recent-runs strip were stacked in the same 50%-wide zone. Changed to `lg:grid-cols-[2fr_1fr_1fr]`: left stays at 50% for the current-work surface, middle 25% is budget alone, right 25% is recent-runs alone. Each peer gets horizontal breathing room; the stacked-pair visual weight is gone.
+  - *Lens — Common Region (Gestalt):* budget and recent-runs are independent signals that answer different questions ("how are we on spend?" vs. "how did recent runs go?"). Treating them as peers reinforces that independence.
+  - *Lens — Proximity:* putting them in separate zones rather than stacked in one zone visually separates concerns.
+  - *Budget readability at 25%:* at a 1440px viewport with the standard sidebar, content width lands around 1100–1150px; three zones at 2fr/1fr/1fr give the middle/right zones ~275–290px each. The budget card's densest line — `$amount of $limit` + `utilizationPercent%` — fits comfortably with `justify-between` and `gap-2`; the "remaining · resets in N days" line at text-xs stays within ~250px content width. Tested mentally against worst-case values (`$10,000.00 of $100,000.00` + `100%`) — still fits. No fallback to 50/50 was needed.
+  - *Narrow-viewport caveat:* at the `lg:` breakpoint itself (1024px) the 25% zones drop to ~170–200px content width, which would squeeze the budget card's dense line. Acceptable because the layout stacks at smaller viewports (`grid-cols-1` below `lg`), and the primary-goal test is specifically at 1440px.
+
+- **Tooltips via shadcn primitive, not native `title`.** The Phase 3a initial pass used the HTML `title` attribute on the recent-runs `Link`. Native browser tooltips are unreliable: delay is OS-dependent, visual styling is OS-dependent, and some browsers suppress the title attribute on anchor elements in certain cases. Replaced with `<Tooltip><TooltipTrigger asChild>...</TooltipTrigger><TooltipContent>...</TooltipContent></Tooltip>` from `@/components/ui/tooltip`, which is already project-standard (e.g., `HintIcon` in `agent-config-primitives.tsx:70`). The `TooltipProvider` is globally mounted in `main.tsx`, so no local provider needed.
+  - *Lens — Doherty Threshold:* shadcn Tooltip defaults to `delayDuration={0}` at the provider level, giving sub-100ms open. Native browser tooltips typically wait ~500ms before showing.
+  - *Lens — Jakob's Law:* styled tooltips match the rest of the app's hover-help vocabulary; users expect this look and behavior.
+  - *Content:* tooltip body now carries the full concept-specified triplet — run id + outcome + relative time. The previous `title` attribute was missing the run id.
+  - *Accessibility:* the `aria-label` on the `<Link>` is retained for screen-reader announcements; the visual tooltip is a separate affordance.
+
+### DS deviations
+
+None introduced in this polish. `TooltipProvider` was already mounted globally; `Tooltip` primitives are standard shadcn pattern already used elsewhere.
+
+### Findings surfaced
+
+- The Phase 3a initial tooltip implementation using native `title` was a miss — the concept explicitly specified interactive tooltips as part of the recent-runs deliverable, and native title attributes are not reliable cross-browser. Trust the DS tooltip primitive by default for any hover-content requirement in future phases.

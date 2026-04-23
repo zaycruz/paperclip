@@ -1321,8 +1321,8 @@ function AgentOverview({
 
   return (
     <div className="space-y-8">
-      {/* Hero: two-zone — left "what's happening now" | right "how are we doing" */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Hero: three-zone — left "what's happening now" | middle budget | right recent runs */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr] gap-4">
         {/* Left zone — current work */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -1351,17 +1351,16 @@ function AgentOverview({
           )}
         </div>
 
-        {/* Right zone — how are we doing */}
-        <div className="space-y-3">
-          {/* Budget position */}
+        {/* Middle zone — budget position */}
+        <div>
           {budgetSummary && budgetSummary.amount > 0 ? (
             <div className="border border-border rounded-none p-4 space-y-2">
               <div className="text-xs text-muted-foreground">Budget — this month</div>
-              <div className="flex items-baseline justify-between tabular-nums">
+              <div className="flex items-baseline justify-between gap-2 tabular-nums">
                 <span className="text-sm font-semibold">
                   {formatCents(budgetSummary.observedAmount)} of {formatCents(budgetSummary.amount)}
                 </span>
-                <span className="text-xs text-muted-foreground">{budgetSummary.utilizationPercent}%</span>
+                <span className="text-xs text-muted-foreground shrink-0">{budgetSummary.utilizationPercent}%</span>
               </div>
               <div className="h-2 bg-muted overflow-hidden rounded-full">
                 <div
@@ -1386,8 +1385,10 @@ function AgentOverview({
               No budget configured.
             </div>
           )}
+        </div>
 
-          {/* Recent runs — 7 icons (shape + color for WCAG color-independence) */}
+        {/* Right zone — recent runs (7 icons, shape + color for WCAG color-independence) */}
+        <div>
           <div className="border border-border rounded-none p-4 space-y-2">
             <div className="text-xs text-muted-foreground">Recent runs — last 7</div>
             {recentRuns.length === 0 ? (
@@ -1398,18 +1399,27 @@ function AgentOverview({
                   const tone = runStatusIcons[run.status] ?? { icon: Clock, color: "text-neutral-400" };
                   const Icon = tone.icon;
                   return (
-                    <Link
-                      key={run.id}
-                      to={`/agents/${agentRouteId}/runs/${run.id}`}
-                      aria-label={`Run ${run.id.slice(0, 8)} — ${run.status}, ${relativeTime(run.createdAt)}`}
-                      title={`${run.status} · ${relativeTime(run.createdAt)}`}
-                      className={cn(
-                        "inline-flex shrink-0 no-underline transition-opacity hover:opacity-70",
-                        tone.color,
-                      )}
-                    >
-                      <Icon className={cn("h-3.5 w-3.5", run.status === "running" && "animate-spin")} />
-                    </Link>
+                    <Tooltip key={run.id}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          to={`/agents/${agentRouteId}/runs/${run.id}`}
+                          aria-label={`Run ${run.id.slice(0, 8)} — ${run.status}, ${relativeTime(run.createdAt)}`}
+                          className={cn(
+                            "inline-flex shrink-0 no-underline transition-opacity hover:opacity-70",
+                            tone.color,
+                          )}
+                        >
+                          <Icon className={cn("h-3.5 w-3.5", run.status === "running" && "animate-spin")} />
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        <span className="font-mono">{run.id.slice(0, 8)}</span>
+                        {" · "}
+                        {run.status}
+                        {" · "}
+                        {relativeTime(run.createdAt)}
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>

@@ -19,6 +19,7 @@ import {
   ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS,
   heartbeatService,
 } from "../services/heartbeat.ts";
+import { recoveryService } from "../services/recovery/service.ts";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -247,5 +248,61 @@ describeEmbeddedPostgres("active-run output watchdog", () => {
 
     expect(staleResult).toMatchObject({ created: 0, snoozed: 1 });
     expect(noisyResult).toMatchObject({ scanned: 0, created: 0 });
+  });
+
+  it("records watchdog decisions through recovery owner authorization", async () => {
+    const now = new Date("2026-04-22T20:00:00.000Z");
+    const { companyId, managerId, runId } = await seedRunningRun({
+      now,
+      ageMs: ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS + 60_000,
+    });
+    const heartbeat = heartbeatService(db);
+    const recovery = recoveryService(db, { enqueueWakeup: vi.fn() });
+
+    const scan = await heartbeat.scanSilentActiveRuns({ now, companyId });
+    const evaluationIssueId = scan.evaluationIssueIds[0];
+    expect(evaluationIssueId).toBeTruthy();
+
+    await expect(
+      recovery.recordWatchdogDecision({
+        runId,
+        actor: { type: "agent", agentId: randomUUID() },
+        decision: "continue",
+        evaluationIssueId,
+        reason: "not my recovery issue",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const snoozedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+    const decision = await recovery.recordWatchdogDecision({
+      runId,
+      actor: { type: "agent", agentId: managerId },
+      decision: "snooze",
+      evaluationIssueId,
+      reason: "Long compile with no output",
+      snoozedUntil,
+    });
+
+    expect(decision).toMatchObject({
+      runId,
+      evaluationIssueId,
+      decision: "snooze",
+      createdByAgentId: managerId,
+    });
+    await expect(recovery.buildRunOutputSilence({
+      id: runId,
+      companyId,
+      status: "running",
+      lastOutputAt: null,
+      lastOutputSeq: 0,
+      lastOutputStream: null,
+      processStartedAt: new Date(now.getTime() - ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS - 60_000),
+      startedAt: new Date(now.getTime() - ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS - 60_000),
+      createdAt: new Date(now.getTime() - ACTIVE_RUN_OUTPUT_SUSPICION_THRESHOLD_MS - 60_000),
+    }, now)).resolves.toMatchObject({
+      level: "snoozed",
+      snoozedUntil,
+      evaluationIssueId,
+    });
   });
 });

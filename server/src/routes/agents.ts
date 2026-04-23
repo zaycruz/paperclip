@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import path from "node:path";
 import type { Db } from "@paperclipai/db";
-import { agents as agentsTable, companies, heartbeatRunWatchdogDecisions, heartbeatRuns, issues as issuesTable } from "@paperclipai/db";
+import { agents as agentsTable, companies, heartbeatRuns, issues as issuesTable } from "@paperclipai/db";
 import { and, desc, eq, inArray, not, sql } from "drizzle-orm";
 import {
   agentSkillSyncSchema,
@@ -80,6 +80,8 @@ import {
 } from "../services/default-agent-instructions.js";
 import { getTelemetryClient } from "../telemetry.js";
 import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
+import { recoveryService } from "../services/recovery/service.js";
+import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
 
 const RUN_LOG_DEFAULT_LIMIT_BYTES = 256_000;
 const RUN_LOG_MAX_LIMIT_BYTES = 1024 * 1024;
@@ -135,6 +137,7 @@ export function agentRoutes(db: Db) {
   const approvalsSvc = approvalService(db);
   const budgets = budgetService(db);
   const heartbeat = heartbeatService(db);
+  const recovery = recoveryService(db, { enqueueWakeup: heartbeat.wakeup });
   const issueApprovalsSvc = issueApprovalService(db);
   const secretsSvc = secretService(db);
   const instructions = agentInstructionsService();
@@ -2618,62 +2621,14 @@ export function agentRoutes(db: Db) {
       return;
     }
 
-    let evaluationIssue: { id: string; assigneeAgentId: string | null; companyId: string } | null = null;
-    if (evaluationIssueId) {
-      evaluationIssue = await db
-        .select({
-          id: issuesTable.id,
-          assigneeAgentId: issuesTable.assigneeAgentId,
-          companyId: issuesTable.companyId,
-        })
-        .from(issuesTable)
-        .where(and(eq(issuesTable.id, evaluationIssueId), eq(issuesTable.companyId, existing.companyId)))
-        .then((rows) => rows[0] ?? null);
-      if (!evaluationIssue) {
-        res.status(404).json({ error: "Evaluation issue not found" });
-        return;
-      }
-    }
-
-    const boardActor = req.actor.type === "board";
-    const assignedRecoveryOwner =
-      req.actor.type === "agent" &&
-      req.actor.agentId &&
-      evaluationIssue?.assigneeAgentId === req.actor.agentId;
-    if (!boardActor && !assignedRecoveryOwner) {
-      throw forbidden("Only the board or the assigned recovery owner can record watchdog decisions");
-    }
-
-    const [row] = await db
-      .insert(heartbeatRunWatchdogDecisions)
-      .values({
-        companyId: existing.companyId,
-        runId: existing.id,
-        evaluationIssueId,
-        decision,
-        snoozedUntil,
-        reason,
-        createdByAgentId: req.actor.type === "agent" ? req.actor.agentId ?? null : null,
-        createdByUserId: req.actor.type === "board" ? req.actor.userId ?? null : null,
-        createdByRunId: typeof req.body?.createdByRunId === "string" ? req.body.createdByRunId : null,
-      })
-      .returning();
-
-    await logActivity(db, {
-      companyId: existing.companyId,
-      actorType: req.actor.type === "agent" ? "agent" : "user",
-      actorId: req.actor.type === "agent" ? req.actor.agentId ?? "agent" : req.actor.userId ?? "board",
-      agentId: req.actor.type === "agent" ? req.actor.agentId ?? null : null,
+    const row = await recovery.recordWatchdogDecision({
       runId: existing.id,
-      action: decision === "snooze" ? "heartbeat.watchdog_snoozed" : "heartbeat.watchdog_decision_recorded",
-      entityType: "heartbeat_run",
-      entityId: existing.id,
-      details: {
-        decision,
-        evaluationIssueId,
-        snoozedUntil: snoozedUntil?.toISOString() ?? null,
-        reason,
-      },
+      actor: req.actor,
+      decision: decision as "snooze" | "continue" | "dismissed_false_positive",
+      evaluationIssueId,
+      reason,
+      snoozedUntil,
+      createdByRunId: typeof req.body?.createdByRunId === "string" ? req.body.createdByRunId : null,
     });
 
     res.json(row);

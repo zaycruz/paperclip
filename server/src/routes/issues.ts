@@ -1909,13 +1909,16 @@ export function issueRoutes(
     if (reviewRequest !== undefined && transition.patch.executionState === undefined) {
       const existingExecutionState = parseIssueExecutionState(existing.executionState);
       if (!existingExecutionState || existingExecutionState.status !== "pending") {
-        res.status(422).json({ error: "reviewRequest requires an active review or approval stage" });
-        return;
+        if (reviewRequest !== null) {
+          res.status(422).json({ error: "reviewRequest requires an active review or approval stage" });
+          return;
+        }
+      } else {
+        updateFields.executionState = {
+          ...existingExecutionState,
+          reviewRequest,
+        };
       }
-      updateFields.executionState = {
-        ...existingExecutionState,
-        reviewRequest,
-      };
     }
 
     const nextAssigneeAgentId =

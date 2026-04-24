@@ -2237,9 +2237,12 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
       }}
       onDrop={(evt) => {
         if (!canAcceptFiles) return;
-        resetDragState();
-        if (evt.defaultPrevented) return;
+        if (evt.defaultPrevented) {
+          resetDragState();
+          return;
+        }
         evt.preventDefault();
+        resetDragState();
         void handleDroppedFiles(evt.dataTransfer?.files);
       }}
     >

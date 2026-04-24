@@ -841,6 +841,7 @@ describe("inbox helpers", () => {
           labels: [],
           projects: [],
           workspaces: [],
+          liveOnly: false,
           hideRoutineExecutions: true,
         },
       }).map((issue) => issue.id),
@@ -860,6 +861,7 @@ describe("inbox helpers", () => {
           labels: [],
           projects: [],
           workspaces: [],
+          liveOnly: false,
           hideRoutineExecutions: true,
         },
       }),
@@ -879,6 +881,7 @@ describe("inbox helpers", () => {
           labels: [],
           projects: [],
           workspaces: [],
+          liveOnly: false,
           hideRoutineExecutions: true,
         },
       }),
@@ -944,6 +947,7 @@ describe("inbox helpers", () => {
         labels: ["label-1"],
         projects: ["project-1"],
         workspaces: ["workspace-1"],
+        liveOnly: true,
         hideRoutineExecutions: false,
       },
     });
@@ -958,6 +962,7 @@ describe("inbox helpers", () => {
         labels: [],
         projects: [],
         workspaces: [],
+        liveOnly: false,
         hideRoutineExecutions: true,
       },
     });
@@ -973,6 +978,7 @@ describe("inbox helpers", () => {
         labels: ["label-1"],
         projects: ["project-1"],
         workspaces: ["workspace-1"],
+        liveOnly: true,
         hideRoutineExecutions: false,
       },
     });
@@ -987,6 +993,7 @@ describe("inbox helpers", () => {
         labels: [],
         projects: [],
         workspaces: [],
+        liveOnly: false,
         hideRoutineExecutions: true,
       },
     });
@@ -1004,6 +1011,7 @@ describe("inbox helpers", () => {
         labels: null,
         projects: ["project-1"],
         workspaces: ["workspace-1", false],
+        liveOnly: "yes",
         hideRoutineExecutions: "yes",
       },
     }));
@@ -1019,6 +1027,7 @@ describe("inbox helpers", () => {
         labels: [],
         projects: ["project-1"],
         workspaces: ["workspace-1"],
+        liveOnly: false,
         hideRoutineExecutions: false,
       },
     });

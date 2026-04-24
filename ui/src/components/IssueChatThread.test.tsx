@@ -318,6 +318,50 @@ describe("IssueChatThread", () => {
     });
   });
 
+  it("shows explicit follow-up badges and event copy", () => {
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <IssueChatThread
+            comments={[{
+              id: "comment-1",
+              companyId: "company-1",
+              issueId: "issue-1",
+              authorAgentId: null,
+              authorUserId: "local-board",
+              body: "Please continue validation.",
+              followUpRequested: true,
+              createdAt: new Date("2026-03-11T10:00:00.000Z"),
+              updatedAt: new Date("2026-03-11T10:00:00.000Z"),
+            }]}
+            linkedRuns={[]}
+            timelineEvents={[{
+              id: "event-1",
+              actorType: "agent",
+              actorId: "agent-1",
+              createdAt: new Date("2026-03-11T10:00:00.000Z"),
+              commentId: "comment-1",
+              followUpRequested: true,
+            }]}
+            liveRuns={[]}
+            onAdd={async () => {}}
+            showComposer={false}
+            enableLiveTranscriptPolling={false}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain("Follow-up");
+    expect(container.textContent).toContain("requested follow-up");
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   it("shows unresolved blocker context above the composer", () => {
     const root = createRoot(container);
 

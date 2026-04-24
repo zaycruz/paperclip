@@ -58,6 +58,7 @@ import { buildIssueThreadInteractionSummary, isIssueThreadInteraction } from "..
 import { resolveIssueChatTranscriptRuns } from "../lib/issueChatTranscriptRuns";
 import type { IssueTimelineAssignee, IssueTimelineEvent } from "../lib/issue-timeline-events";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -1196,6 +1197,7 @@ function IssueChatUserMessage({ message }: { message: ThreadMessage }) {
   const authorName = typeof custom.authorName === "string" ? custom.authorName : null;
   const authorUserId = typeof custom.authorUserId === "string" ? custom.authorUserId : null;
   const queued = custom.queueState === "queued" || custom.clientStatus === "queued";
+  const followUpRequested = custom.followUpRequested === true;
   const queueReason = typeof custom.queueReason === "string" ? custom.queueReason : null;
   const queueBadgeLabel = queueReason === "hold" ? "\u23f8 Deferred wake" : "Queued";
   const pending = custom.clientStatus === "pending";
@@ -1221,6 +1223,11 @@ function IssueChatUserMessage({ message }: { message: ThreadMessage }) {
     <div className={cn("flex min-w-0 max-w-[85%] flex-col", isCurrentUser && "items-end")}>
       <div className={cn("mb-1 flex items-center gap-2 px-1", isCurrentUser ? "justify-end" : "justify-start")}>
         <span className="text-sm font-medium text-foreground">{resolvedAuthorName}</span>
+        {followUpRequested ? (
+          <Badge variant="outline" className="text-[10px] uppercase tracking-[0.14em]">
+            Follow-up
+          </Badge>
+        ) : null}
       </div>
       <div
         className={cn(
@@ -1396,6 +1403,7 @@ function IssueChatAssistantMessage({ message }: { message: ThreadMessage }) {
   };
 
   const activeVote = commentId ? feedbackVoteByTargetId.get(commentId) ?? null : null;
+  const followUpRequested = custom.followUpRequested === true;
 
   return (
     <div id={anchorId}>
@@ -1429,6 +1437,11 @@ function IssueChatAssistantMessage({ message }: { message: ThreadMessage }) {
           ) : (
             <div className="mb-1.5 flex items-center gap-2">
               <span className="text-sm font-medium text-foreground">{authorName}</span>
+              {followUpRequested ? (
+                <Badge variant="outline" className="text-[10px] uppercase tracking-[0.14em]">
+                  Follow-up
+                </Badge>
+              ) : null}
               {isRunning ? (
                 <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-200">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1944,7 +1957,9 @@ function IssueChatSystemMessage({ message }: { message: ThreadMessage }) {
       <div className="min-w-0 space-y-1">
         <div className={cn("flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs", isCurrentUser && "justify-end")}>
           <span className="font-medium text-foreground">{actorName}</span>
-          <span className="text-muted-foreground">updated this task</span>
+          <span className="text-muted-foreground">
+            {custom.followUpRequested === true ? "requested follow-up" : "updated this task"}
+          </span>
           <a
             href={anchorId ? `#${anchorId}` : undefined}
             className="text-xs text-muted-foreground transition-colors hover:text-foreground hover:underline"

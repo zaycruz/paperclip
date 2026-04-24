@@ -1296,6 +1296,20 @@ describe("heartbeat comment wake batching", () => {
         wakeReason: "issue_comment_mentioned",
       });
 
+      const issueAfterMention = await db
+        .select({
+          assigneeAgentId: issues.assigneeAgentId,
+          executionRunId: issues.executionRunId,
+          executionAgentNameKey: issues.executionAgentNameKey,
+        })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows) => rows[0] ?? null);
+
+      expect(issueAfterMention?.assigneeAgentId).toBe(primaryAgentId);
+      expect(issueAfterMention?.executionRunId).not.toBe(mentionedRuns[0]?.id);
+      expect(issueAfterMention?.executionAgentNameKey).not.toBe("mentioned agent");
+
       const primaryRuns = await db
         .select()
         .from(heartbeatRuns)
@@ -1317,6 +1331,155 @@ describe("heartbeat comment wake batching", () => {
           ),
         );
       expect(missingCommentRetries).toHaveLength(1);
+    } finally {
+      gateway.releaseFirstWait();
+      await gateway.close();
+    }
+  }, 120_000);
+
+  it("does not mark a direct mentioned-agent run as the issue execution owner", async () => {
+    const gateway = await createControlledGatewayServer();
+    const companyId = randomUUID();
+    const primaryAgentId = randomUUID();
+    const mentionedAgentId = randomUUID();
+    const issueId = randomUUID();
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+    const heartbeat = heartbeatService(db);
+
+    try {
+      await db.insert(companies).values({
+        id: companyId,
+        name: "Paperclip",
+        issuePrefix,
+        requireBoardApprovalForNewAgents: false,
+      });
+
+      await db.insert(agents).values([
+        {
+          id: primaryAgentId,
+          companyId,
+          name: "Primary Agent",
+          role: "engineer",
+          status: "idle",
+          adapterType: "openclaw_gateway",
+          adapterConfig: {
+            url: gateway.url,
+            headers: {
+              "x-openclaw-token": "gateway-token",
+            },
+            payloadTemplate: {
+              message: "wake now",
+            },
+            waitTimeoutMs: 2_000,
+          },
+          runtimeConfig: {},
+          permissions: {},
+        },
+        {
+          id: mentionedAgentId,
+          companyId,
+          name: "Mentioned Agent",
+          role: "engineer",
+          status: "idle",
+          adapterType: "openclaw_gateway",
+          adapterConfig: {
+            url: gateway.url,
+            headers: {
+              "x-openclaw-token": "gateway-token",
+            },
+            payloadTemplate: {
+              message: "wake now",
+            },
+            waitTimeoutMs: 2_000,
+          },
+          runtimeConfig: {},
+          permissions: {},
+        },
+      ]);
+
+      await db.insert(issues).values({
+        id: issueId,
+        companyId,
+        title: "Mention should not steal execution ownership",
+        status: "todo",
+        priority: "medium",
+        assigneeAgentId: primaryAgentId,
+        issueNumber: 1,
+        identifier: `${issuePrefix}-1`,
+      });
+
+      const mentionComment = await db
+        .insert(issueComments)
+        .values({
+          companyId,
+          issueId,
+          authorUserId: "user-1",
+          body: "@Mentioned Agent please inspect this.",
+        })
+        .returning()
+        .then((rows) => rows[0]);
+
+      const mentionRun = await heartbeat.wakeup(mentionedAgentId, {
+        source: "automation",
+        triggerDetail: "system",
+        reason: "issue_comment_mentioned",
+        payload: { issueId, commentId: mentionComment.id },
+        contextSnapshot: {
+          issueId,
+          taskId: issueId,
+          commentId: mentionComment.id,
+          wakeCommentId: mentionComment.id,
+          wakeReason: "issue_comment_mentioned",
+          source: "comment.mention",
+        },
+        requestedByActorType: "user",
+        requestedByActorId: "user-1",
+      });
+
+      expect(mentionRun).not.toBeNull();
+      await waitFor(() => gateway.getAgentPayloads().length === 1);
+
+      const issueDuringMention = await db
+        .select({
+          assigneeAgentId: issues.assigneeAgentId,
+          executionRunId: issues.executionRunId,
+          executionAgentNameKey: issues.executionAgentNameKey,
+        })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows) => rows[0] ?? null);
+
+      expect(issueDuringMention).toMatchObject({
+        assigneeAgentId: primaryAgentId,
+        executionRunId: null,
+        executionAgentNameKey: null,
+      });
+
+      gateway.releaseFirstWait();
+      await waitFor(async () => {
+        const run = await db
+          .select({ status: heartbeatRuns.status })
+          .from(heartbeatRuns)
+          .where(eq(heartbeatRuns.id, mentionRun!.id))
+          .then((rows) => rows[0] ?? null);
+        return run?.status === "succeeded";
+      }, 90_000);
+
+      const issueAfterMention = await db
+        .select({
+          assigneeAgentId: issues.assigneeAgentId,
+          executionRunId: issues.executionRunId,
+          executionAgentNameKey: issues.executionAgentNameKey,
+        })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows) => rows[0] ?? null);
+
+      expect(issueAfterMention).toMatchObject({
+        assigneeAgentId: primaryAgentId,
+        executionRunId: null,
+        executionAgentNameKey: null,
+      });
     } finally {
       gateway.releaseFirstWait();
       await gateway.close();

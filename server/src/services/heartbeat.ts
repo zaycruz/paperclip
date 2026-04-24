@@ -3752,6 +3752,9 @@ export function heartbeatService(db: Db) {
           and(
             eq(issues.id, claimedIssueId),
             eq(issues.companyId, claimed.companyId),
+            // Mention/context runs can touch an issue, but only the current assignee
+            // owns the issue execution lock shown as the active run.
+            eq(issues.assigneeAgentId, claimed.agentId),
             or(isNull(issues.executionRunId), eq(issues.executionRunId, claimed.id)),
           ),
         );
@@ -5918,7 +5921,8 @@ export function heartbeatService(db: Db) {
             executionLockedAt: now,
             updatedAt: now,
           })
-          .where(eq(issues.id, issue.id));
+          // Promoted mention wakes are issue-scoped, not issue ownership transfers.
+          .where(and(eq(issues.id, issue.id), eq(issues.assigneeAgentId, deferredAgent.id)));
 
         return {
           kind: "promoted" as const,

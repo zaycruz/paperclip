@@ -1,1 +1,0 @@
-import{a as s}from"./iframe-aoIC7NDi.js";const o={list:e=>s.get(`/companies/${e}/secrets`),providers:e=>s.get(`/companies/${e}/secret-providers`),create:(e,t)=>s.post(`/companies/${e}/secrets`,t),rotate:(e,t)=>s.post(`/secrets/${e}/rotate`,t),update:(e,t)=>s.patch(`/secrets/${e}`,t),remove:e=>s.delete(`/secrets/${e}`)};export{o as s};

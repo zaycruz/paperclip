@@ -1,1 +1,0 @@
-import{j as o,c as t}from"./iframe-aoIC7NDi.js";function n({className:e,...s}){return o.jsxDEV("div",{"data-slot":"skeleton",className:t("bg-accent/75 rounded-md",e),...s},void 0,!1,{fileName:"/Users/dotta/paperclip/ui/src/components/ui/skeleton.tsx",lineNumber:5,columnNumber:5},this)}n.__docgenInfo={description:"",methods:[],displayName:"Skeleton"};export{n as S};

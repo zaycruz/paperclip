@@ -1,6 +1,0 @@
-import{c as m}from"./createLucideIcon-D2uUVdtm.js";import{r as t}from"./iframe-aoIC7NDi.js";/**
- * @license lucide-react v0.574.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const v=[["path",{d:"M10 11v6",key:"nco0om"}],["path",{d:"M14 11v6",key:"outv1u"}],["path",{d:"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6",key:"miytrc"}],["path",{d:"M3 6h18",key:"d0wm0j"}],["path",{d:"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",key:"e791ji"}]],T=m("trash-2",v),h=250,k=1600;function S(){const[o,c]=t.useState("idle"),r=t.useRef(0),n=t.useRef(null),s=t.useRef(null),e=t.useCallback(()=>{n.current&&(clearTimeout(n.current),n.current=null),s.current&&(clearTimeout(s.current),s.current=null)},[]);t.useEffect(()=>e,[e]);const i=t.useCallback(()=>{r.current+=1,e(),c("idle")},[e]),l=t.useCallback(()=>{e(),c("idle")},[e]),d=t.useCallback(async f=>{const a=r.current+1;r.current=a,e(),n.current=setTimeout(()=>{r.current===a&&c("saving")},h);try{if(await f(),r.current!==a)return;e(),c("saved"),s.current=setTimeout(()=>{r.current===a&&c("idle")},k)}catch(u){throw r.current!==a||(e(),c("error")),u}},[e]);return{state:o,markDirty:l,reset:i,runSave:d}}export{T,S as u};

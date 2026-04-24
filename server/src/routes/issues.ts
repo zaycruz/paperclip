@@ -35,6 +35,7 @@ import { trackAgentTaskCompleted } from "@paperclipai/shared/telemetry";
 import { getTelemetryClient } from "../telemetry.js";
 import type { StorageService } from "../storage/types.js";
 import { validate } from "../middleware/validate.js";
+import * as serviceIndex from "../services/index.js";
 import {
   accessService,
   agentService,
@@ -49,7 +50,6 @@ import {
   ISSUE_LIST_MAX_LIMIT,
   issueReferenceService,
   issueService,
-  issueTreeControlService,
   clampIssueListLimit,
   documentService,
   logActivity,
@@ -409,7 +409,15 @@ export function issueRoutes(
   const documentsSvc = documentService(db);
   const issueReferencesSvc = issueReferenceService(db);
   const routinesSvc = routineService(db);
-  const treeControlSvc = issueTreeControlService(db);
+  const issueTreeControlFactory = Object.prototype.hasOwnProperty.call(
+    serviceIndex,
+    "issueTreeControlService",
+  )
+    ? serviceIndex.issueTreeControlService
+    : undefined;
+  const treeControlSvc = issueTreeControlFactory?.(db) ?? {
+    getActivePauseHoldGate: async () => null,
+  };
   const feedbackExportService = opts?.feedbackExportService;
   const upload = multer({
     storage: multer.memoryStorage(),

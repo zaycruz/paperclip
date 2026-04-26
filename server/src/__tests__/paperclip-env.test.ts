@@ -52,6 +52,7 @@ describe("buildPaperclipEnv", () => {
   });
 
   it("uses runtime listen host/port when explicit URL is not set", () => {
+    delete process.env.PAPERCLIP_RUNTIME_API_URL;
     delete process.env.PAPERCLIP_API_URL;
     process.env.PAPERCLIP_LISTEN_HOST = "0.0.0.0";
     process.env.PAPERCLIP_LISTEN_PORT = "3101";
@@ -63,6 +64,7 @@ describe("buildPaperclipEnv", () => {
   });
 
   it("formats IPv6 hosts safely in fallback URL generation", () => {
+    delete process.env.PAPERCLIP_RUNTIME_API_URL;
     delete process.env.PAPERCLIP_API_URL;
     process.env.PAPERCLIP_LISTEN_HOST = "::1";
     process.env.PAPERCLIP_LISTEN_PORT = "3101";

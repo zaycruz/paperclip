@@ -15,7 +15,7 @@ const CONTINUATION_ACTIVE_ISSUE_STATUSES = new Set(["todo", "in_progress"]);
 const CONTINUATION_AGENT_STATUSES = new Set(["active", "idle", "running", "error"]);
 const IDEMPOTENT_WAKE_STATUSES = ["queued", "deferred_issue_execution", "completed"];
 
-type HeartbeatRunRow = typeof heartbeatRuns.$inferSelect;
+type HeartbeatRunRow = Pick<typeof heartbeatRuns.$inferSelect, "id" | "companyId" | "agentId" | "continuationAttempt">;
 type IssueRow = Pick<
   typeof issues.$inferSelect,
   "id" | "companyId" | "identifier" | "title" | "status" | "assigneeAgentId" | "executionState" | "projectId"

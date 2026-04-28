@@ -6,6 +6,7 @@ import {
   MIN_ISSUE_GRAPH_LIVENESS_AUTO_RECOVERY_LOOKBACK_HOURS,
   type IssueGraphLivenessAutoRecoveryPreview,
   type IssueGraphLivenessAutoRecoveryPreviewItem,
+  type RunLivenessState,
 } from "@paperclipai/shared";
 import {
   agents,
@@ -43,6 +44,13 @@ import {
   type IssueLivenessFinding,
 } from "./issue-graph-liveness.js";
 import { isAutomaticRecoverySuppressedByPauseHold } from "./pause-hold-guard.js";
+import {
+  RUN_LIVENESS_CONTINUATION_REASON,
+  buildRunLivenessContinuationIdempotencyKey,
+  decideRunLivenessContinuation,
+  findExistingRunLivenessContinuationWake,
+  readContinuationAttempt,
+} from "./run-liveness-continuations.js";
 
 const EXECUTION_PATH_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"] as const;
 const UNSUCCESSFUL_HEARTBEAT_RUN_TERMINAL_STATUSES = ["failed", "cancelled", "timed_out"] as const;
@@ -72,7 +80,17 @@ type RecoveryWakeup = (
 
 type LatestIssueRun = Pick<
   typeof heartbeatRuns.$inferSelect,
-  "id" | "agentId" | "status" | "error" | "errorCode" | "contextSnapshot" | "livenessState" | "nextAction"
+  | "id"
+  | "companyId"
+  | "agentId"
+  | "status"
+  | "error"
+  | "errorCode"
+  | "contextSnapshot"
+  | "livenessState"
+  | "livenessReason"
+  | "nextAction"
+  | "continuationAttempt"
 > | null;
 
 type PostRunIssueDisposition = "terminal" | "explicitly_waiting" | "explicitly_live" | "invalid";
@@ -306,13 +324,16 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
     return db
       .select({
         id: heartbeatRuns.id,
+        companyId: heartbeatRuns.companyId,
         agentId: heartbeatRuns.agentId,
         status: heartbeatRuns.status,
         error: heartbeatRuns.error,
         errorCode: heartbeatRuns.errorCode,
         contextSnapshot: heartbeatRuns.contextSnapshot,
         livenessState: heartbeatRuns.livenessState,
+        livenessReason: heartbeatRuns.livenessReason,
         nextAction: heartbeatRuns.nextAction,
+        continuationAttempt: heartbeatRuns.continuationAttempt,
       })
       .from(heartbeatRuns)
       .where(
@@ -503,6 +524,89 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
         source: "issue.assigned_todo_liveness_dispatch",
       },
     });
+  }
+
+  async function continueOrEscalateSuccessfulStrandedRun(input: {
+    issue: typeof issues.$inferSelect;
+    agent: typeof agents.$inferSelect;
+    latestRun: NonNullable<LatestIssueRun>;
+  }) {
+    const { issue, agent, latestRun } = input;
+    const livenessState = latestRun.livenessState as RunLivenessState | null;
+    const nextAttempt = readContinuationAttempt(latestRun.continuationAttempt) + 1;
+    const idempotencyKey = buildRunLivenessContinuationIdempotencyKey({
+      issueId: issue.id,
+      sourceRunId: latestRun.id,
+      livenessState: livenessState ?? "failed",
+      nextAttempt,
+    });
+    const existingWake = await findExistingRunLivenessContinuationWake(db, {
+      companyId: issue.companyId,
+      idempotencyKey,
+    });
+    const budgetBlocked = await isInvocationBudgetBlocked(issue, agent.id);
+    if (budgetBlocked) return "skipped" as const;
+
+    const decision = decideRunLivenessContinuation({
+      run: latestRun,
+      issue,
+      agent,
+      livenessState,
+      livenessReason: latestRun.livenessReason,
+      nextAction: latestRun.nextAction,
+      budgetBlocked,
+      idempotentWakeExists: Boolean(existingWake),
+    });
+
+    if (decision.kind === "enqueue") {
+      const queued = await deps.enqueueWakeup(agent.id, {
+        source: "automation",
+        triggerDetail: "system",
+        reason: RUN_LIVENESS_CONTINUATION_REASON,
+        payload: decision.payload,
+        contextSnapshot: decision.contextSnapshot,
+        idempotencyKey: decision.idempotencyKey,
+        requestedByActorType: "system",
+        requestedByActorId: "recovery.reconcile_stranded_assigned_issue",
+      });
+      if (!queued) return "skipped" as const;
+
+      await db
+        .update(heartbeatRuns)
+        .set({
+          continuationAttempt: decision.nextAttempt,
+          updatedAt: new Date(),
+        })
+        .where(eq(heartbeatRuns.id, latestRun.id));
+      return "queued" as const;
+    }
+
+    if (decision.kind === "skip" && decision.reason === "continuation wake already exists for this source run and attempt") {
+      return "skipped" as const;
+    }
+
+    const continuationDetail = decision.kind === "exhausted"
+      ? `\n\n${decision.comment}`
+      : [
+        "",
+        "",
+        "Paperclip did not queue an automatic continuation because the latest successful run did not leave a safe runnable action path.",
+        "",
+        `- Liveness state: \`${livenessState ?? "unknown"}\``,
+        `- Reason: ${decision.reason}`,
+      ].join("\n");
+
+    const updated = await escalateStrandedAssignedIssue({
+      issue,
+      previousStatus: "in_progress",
+      latestRun,
+      comment:
+        "Paperclip observed a successful terminal run for this assigned `in_progress` issue, " +
+        "but no live execution, queued wake, waiting interaction, approval, or recovery owner now holds the next action." +
+        continuationDetail +
+        "\n\nMoving it to `blocked` so it is visible for intervention.",
+    });
+    return updated ? "escalated" as const : "skipped" as const;
   }
 
   async function isInvocationBudgetBlocked(issue: typeof issues.$inferSelect, agentId: string) {
@@ -1801,6 +1905,24 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
             "Moving it to `blocked` so it is visible for intervention.",
         });
         if (updated) {
+          result.escalated += 1;
+          result.issueIds.push(issue.id);
+        } else {
+          result.skipped += 1;
+        }
+        continue;
+      }
+
+      if (latestRun?.status === "succeeded") {
+        const successfulRunRecovery = await continueOrEscalateSuccessfulStrandedRun({
+          issue,
+          agent,
+          latestRun,
+        });
+        if (successfulRunRecovery === "queued") {
+          result.continuationRequeued += 1;
+          result.issueIds.push(issue.id);
+        } else if (successfulRunRecovery === "escalated") {
           result.escalated += 1;
           result.issueIds.push(issue.id);
         } else {

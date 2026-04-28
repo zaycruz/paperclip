@@ -13,6 +13,7 @@ import {
   Component,
   forwardRef,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useImperativeHandle,
@@ -27,7 +28,12 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useLocation } from "@/lib/router";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import {
+  observeWindowOffset,
+  observeWindowRect,
+  useVirtualizer,
+  windowScroll,
+} from "@tanstack/react-virtual";
 import type {
   Agent,
   FeedbackDataSharingPreference,
@@ -2148,23 +2154,105 @@ type VirtualizedVisibleAnchorSnapshot = {
   viewportTop: number;
 };
 
-const VirtualizedIssueChatThreadList = forwardRef<VirtualizedIssueChatThreadListHandle, VirtualizedIssueChatThreadListProps>(function VirtualizedIssueChatThreadList({
+type VirtualizedScrollMode =
+  | { kind: "window" }
+  | { kind: "element"; element: HTMLElement };
+
+// The chat thread renders inside `<main id="main-content">` on the real issue
+// page (overflow-auto on desktop), but lives at document scope on mobile (main
+// is overflow-visible) and in the auth-free perf fixture. Walk the DOM to find
+// the actual scroll container so the virtualizer binds to the right offset
+// source — otherwise it stays anchored at offset 0 forever and the visible
+// chat area renders blank past the first viewport (PAP-2660).
+function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+  if (!el || typeof window === "undefined") return null;
+  let current: HTMLElement | null = el.parentElement;
+  while (current && current !== document.body && current !== document.documentElement) {
+    const overflowY = window.getComputedStyle(current).overflowY;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+const VirtualizedIssueChatThreadList = forwardRef<VirtualizedIssueChatThreadListHandle, VirtualizedIssueChatThreadListProps>(function VirtualizedIssueChatThreadList(props, ref) {
+  const probeRef = useRef<HTMLDivElement | null>(null);
+  // Default to window scroll on first render so the imperative handle is
+  // available immediately for hash-target / submit-scroll effects. After mount
+  // we probe the DOM and remount via key={modeKey} if the actual scroll
+  // container is an element ancestor (e.g. desktop <main id="main-content">).
+  const [mode, setMode] = useState<VirtualizedScrollMode>({ kind: "window" });
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const detect = () => {
+      const probe = probeRef.current;
+      if (!probe) return;
+      const container = findScrollContainer(probe);
+      setMode((prev) => {
+        if (container === null) {
+          return prev.kind === "window" ? prev : { kind: "window" };
+        }
+        if (prev.kind === "element" && prev.element === container) return prev;
+        return { kind: "element", element: container };
+      });
+    };
+    detect();
+    window.addEventListener("resize", detect);
+    return () => {
+      window.removeEventListener("resize", detect);
+    };
+  }, []);
+
+  return (
+    <VirtualizedIssueChatThreadListInner
+      key={mode.kind === "window" ? "window" : "element"}
+      ref={ref}
+      probeRef={probeRef}
+      mode={mode}
+      {...props}
+    />
+  );
+});
+
+interface VirtualizedIssueChatThreadListInnerProps extends VirtualizedIssueChatThreadListProps {
+  mode: VirtualizedScrollMode;
+  probeRef: React.MutableRefObject<HTMLDivElement | null>;
+}
+
+const VirtualizedIssueChatThreadListInner = forwardRef<
+  VirtualizedIssueChatThreadListHandle,
+  VirtualizedIssueChatThreadListInnerProps
+>(function VirtualizedIssueChatThreadListInner({
   messages,
   feedbackVoteByTargetId,
   activeRunIds,
   stoppingRunId,
   interruptingQueuedRunId,
   variant,
+  mode,
+  probeRef,
 }, ref) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const pendingPrependAnchorRef = useRef<VirtualizedVisibleAnchorSnapshot | null>(null);
 
+  const setRefs = useCallback((element: HTMLDivElement | null) => {
+    parentRef.current = element;
+    probeRef.current = element;
+  }, [probeRef]);
+
   useLayoutEffect(() => {
     const element = parentRef.current;
     if (!element || typeof window === "undefined") return;
     const update = () => {
-      const offset = element.getBoundingClientRect().top + window.scrollY;
+      if (!parentRef.current) return;
+      const rect = parentRef.current.getBoundingClientRect();
+      const offset = mode.kind === "window"
+        ? rect.top + window.scrollY
+        : rect.top - mode.element.getBoundingClientRect().top + mode.element.scrollTop;
       setScrollMargin((previous) => (Math.abs(previous - offset) < 0.5 ? previous : offset));
     };
     update();
@@ -2172,13 +2260,31 @@ const VirtualizedIssueChatThreadList = forwardRef<VirtualizedIssueChatThreadList
     return () => {
       window.removeEventListener("resize", update);
     };
-  }, []);
+  }, [mode]);
 
   const gap = variant === "embedded"
     ? VIRTUALIZED_THREAD_GAP_EMBEDDED_PX
     : VIRTUALIZED_THREAD_GAP_FULL_PX;
 
-  const virtualizer = useWindowVirtualizer({
+  // Window-mode passes window-specific observers/scroll-fn through the same
+  // useVirtualizer hook (the `Window` vs `Element` type mismatch in the
+  // observer signatures is invisible at runtime — both reach into
+  // instance.scrollElement/targetWindow uniformly — so we widen via `any`
+  // rather than splitting into two component variants).
+  const virtualizerOptions: Record<string, unknown> = mode.kind === "window"
+    ? {
+        getScrollElement: () => (typeof document !== "undefined" ? window : null),
+        observeElementRect: observeWindowRect,
+        observeElementOffset: observeWindowOffset,
+        scrollToFn: windowScroll,
+        initialOffset: () => typeof window !== "undefined" ? window.scrollY : 0,
+      }
+    : {
+        getScrollElement: () => mode.element,
+      };
+
+  const virtualizer = useVirtualizer({
+    ...(virtualizerOptions as Parameters<typeof useVirtualizer>[0]),
     count: messages.length,
     estimateSize: () => VIRTUALIZED_THREAD_ROW_ESTIMATE_PX,
     overscan: VIRTUALIZED_THREAD_OVERSCAN,
@@ -2241,18 +2347,22 @@ const VirtualizedIssueChatThreadList = forwardRef<VirtualizedIssueChatThreadList
       if (!element) return;
       const delta = element.getBoundingClientRect().top - pendingAnchor.viewportTop;
       if (Math.abs(delta) > 1) {
-        window.scrollBy({ top: delta, behavior: "auto" });
+        if (mode.kind === "window") {
+          window.scrollBy({ top: delta, behavior: "auto" });
+        } else {
+          mode.element.scrollBy({ top: delta, behavior: "auto" });
+        }
       }
       virtualizer.measure();
     });
-  }, [messages, virtualizer]);
+  }, [messages, virtualizer, mode]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
 
   return (
     <div
-      ref={parentRef}
+      ref={setRefs}
       data-testid="issue-chat-thread-virtualizer"
       data-virtual-count={messages.length}
       style={{ position: "relative", width: "100%", height: totalSize }}

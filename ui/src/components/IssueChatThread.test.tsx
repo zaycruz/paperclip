@@ -469,6 +469,68 @@ describe("IssueChatThread", () => {
     });
   });
 
+  // Regression for PAP-2660: on the real issue page the chat thread is wrapped
+  // in `<main id="main-content" overflow-auto>`, so the virtualizer must bind
+  // to that ancestor's scroll instead of `window` (which never moves on
+  // desktop). When mounted inside an overflow-auto ancestor the jump-to-latest
+  // action must drive that element's scrollTo, not window.scrollTo.
+  it("targets an overflow-auto ancestor instead of window scroll on jump-to-latest", () => {
+    container.remove();
+    const scrollHost = document.createElement("main");
+    scrollHost.id = "main-content";
+    scrollHost.style.overflowY = "auto";
+    scrollHost.style.overflow = "auto";
+    scrollHost.style.height = "640px";
+    document.body.appendChild(scrollHost);
+    container = document.createElement("div");
+    scrollHost.appendChild(container);
+
+    const root = createRoot(container);
+    const windowScrollToMock = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const elementScrollToMock = vi.fn();
+    scrollHost.scrollTo = elementScrollToMock as unknown as typeof scrollHost.scrollTo;
+
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <IssueChatThread
+            comments={issueChatLongThreadComments}
+            linkedRuns={issueChatLongThreadLinkedRuns}
+            timelineEvents={issueChatLongThreadEvents}
+            liveRuns={[]}
+            agentMap={issueChatLongThreadAgentMap}
+            currentUserId="user-board"
+            onAdd={async () => {}}
+            enableLiveTranscriptPolling={false}
+            transcriptsByRunId={issueChatLongThreadTranscriptsByRunId}
+            hasOutputForRun={(runId) => issueChatLongThreadTranscriptsByRunId.has(runId)}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    const jump = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Jump to latest",
+    ) as HTMLButtonElement | undefined;
+    expect(jump).toBeDefined();
+
+    windowScrollToMock.mockClear();
+    elementScrollToMock.mockClear();
+
+    act(() => {
+      jump?.click();
+    });
+
+    expect(elementScrollToMock.mock.calls.some(([arg]) => hasSmoothScrollBehavior(arg))).toBe(true);
+    expect(windowScrollToMock.mock.calls.some(([arg]) => hasSmoothScrollBehavior(arg))).toBe(false);
+
+    windowScrollToMock.mockRestore();
+    act(() => {
+      root.unmount();
+    });
+    scrollHost.remove();
+  });
+
   it("keeps the direct render path for short threads under the virtualization threshold", () => {
     const root = createRoot(container);
     const directComments = issueChatLongThreadComments.slice(0, 12);

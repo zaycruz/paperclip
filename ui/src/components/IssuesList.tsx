@@ -72,7 +72,7 @@ const ISSUE_SEARCH_RESULT_LIMIT = 200;
 const ISSUE_BOARD_COLUMN_RESULT_LIMIT = 200;
 const INITIAL_ISSUE_ROW_RENDER_LIMIT = 100;
 const ISSUE_ROW_RENDER_BATCH_SIZE = 150;
-const ISSUE_ROW_RENDER_BATCH_DELAY_MS = 0;
+const ISSUE_SCROLL_LOAD_THRESHOLD_PX = 320;
 const boardIssueStatuses = ISSUE_STATUSES;
 const issueStatusLabels: Record<IssueStatus, string> = {
   backlog: "Backlog",
@@ -306,8 +306,11 @@ interface IssuesListProps {
   defaultSortField?: IssueSortField;
   showProgressSummary?: boolean;
   enableRoutineVisibilityFilter?: boolean;
+  hasMoreIssues?: boolean;
+  isLoadingMoreIssues?: boolean;
   mutedIssueIds?: Set<string>;
   issueBadgeById?: Map<string, string>;
+  onLoadMoreIssues?: () => void;
   onSearchChange?: (search: string) => void;
   onUpdateIssue: (id: string, data: Record<string, unknown>) => void;
 }
@@ -475,8 +478,11 @@ export function IssuesList({
   defaultSortField,
   showProgressSummary = false,
   enableRoutineVisibilityFilter = false,
+  hasMoreIssues = false,
+  isLoadingMoreIssues = false,
   mutedIssueIds,
   issueBadgeById,
+  onLoadMoreIssues,
   onSearchChange,
   onUpdateIssue,
 }: IssuesListProps) {
@@ -512,6 +518,7 @@ export function IssuesList({
   const [issueSearch, setIssueSearch] = useState(initialSearch ?? "");
   const [renderedIssueRowLimit, setRenderedIssueRowLimit] = useState(INITIAL_ISSUE_ROW_RENDER_LIMIT);
   const [visibleIssueColumns, setVisibleIssueColumns] = useState<InboxIssueColumn[]>(() => loadIssueColumns(scopedKey));
+  const renderedIssueIdsRef = useRef("");
   const deferredIssueSearch = useDeferredValue(issueSearch);
   const normalizedIssueSearch = deferredIssueSearch.trim().toLowerCase();
 
@@ -966,23 +973,74 @@ export function IssuesList({
 
   useEffect(() => {
     if (viewState.viewMode !== "list") return;
-    setRenderedIssueRowLimit(Math.min(filtered.length, INITIAL_ISSUE_ROW_RENDER_LIMIT));
+    const nextIssueIds = filtered.map((issue) => issue.id).join("|");
+    const previousIssueIds = renderedIssueIdsRef.current;
+    renderedIssueIdsRef.current = nextIssueIds;
+
+    setRenderedIssueRowLimit((current) => {
+      const nextInitialLimit = Math.min(filtered.length, INITIAL_ISSUE_ROW_RENDER_LIMIT);
+      const listAppended = previousIssueIds.length > 0
+        && nextIssueIds.startsWith(previousIssueIds)
+        && filtered.length >= current;
+      if (listAppended) return Math.min(filtered.length, Math.max(current, nextInitialLimit));
+      return nextInitialLimit;
+    });
   }, [filtered, viewState.viewMode]);
 
-  useEffect(() => {
+  const hasMoreRenderedRows = viewState.viewMode === "list" && renderedIssueRowLimit < filtered.length;
+  const remainingIssueRowCount = Math.max(filtered.length - renderedIssueRowLimit, 0);
+  const loadMoreIssueRows = useCallback(() => {
     if (viewState.viewMode !== "list") return;
-    if (renderedIssueRowLimit >= filtered.length) return;
-
-    const timeoutId = window.setTimeout(() => {
+    if (hasMoreRenderedRows) {
       startTransition(() => {
         setRenderedIssueRowLimit((current) => Math.min(filtered.length, current + ISSUE_ROW_RENDER_BATCH_SIZE));
       });
-    }, ISSUE_ROW_RENDER_BATCH_DELAY_MS);
+      return;
+    }
+    if (hasMoreIssues && !isLoadingMoreIssues) {
+      onLoadMoreIssues?.();
+    }
+  }, [
+    filtered.length,
+    hasMoreIssues,
+    hasMoreRenderedRows,
+    isLoadingMoreIssues,
+    onLoadMoreIssues,
+    viewState.viewMode,
+  ]);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [filtered.length, renderedIssueRowLimit, viewState.viewMode]);
+  const canLoadMoreIssues = viewState.viewMode === "list"
+    && !isLoading
+    && (hasMoreRenderedRows || (hasMoreIssues && !isLoadingMoreIssues));
 
-  const remainingIssueRowCount = Math.max(filtered.length - renderedIssueRowLimit, 0);
+  useEffect(() => {
+    if (!canLoadMoreIssues) return;
+    let animationFrameId: number | null = null;
+
+    const checkScrollPosition = () => {
+      if (animationFrameId !== null) return;
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = null;
+        const documentElement = document.documentElement;
+        if (documentElement.scrollHeight === 0) return;
+        const scrollBottom = window.scrollY + window.innerHeight;
+        const threshold = documentElement.scrollHeight - ISSUE_SCROLL_LOAD_THRESHOLD_PX;
+        if (scrollBottom >= threshold) {
+          loadMoreIssueRows();
+        }
+      });
+    };
+
+    window.addEventListener("scroll", checkScrollPosition, { passive: true });
+    window.addEventListener("resize", checkScrollPosition);
+    checkScrollPosition();
+
+    return () => {
+      window.removeEventListener("scroll", checkScrollPosition);
+      window.removeEventListener("resize", checkScrollPosition);
+      if (animationFrameId !== null) window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [canLoadMoreIssues, loadMoreIssueRows]);
 
   const newIssueDefaults = useCallback((groupKey?: string) => {
     const defaults: Record<string, unknown> = { ...(baseCreateIssueDefaults ?? {}) };
@@ -1556,10 +1614,16 @@ export function IssuesList({
           </Collapsible>
           );
           })}
-          {remainingIssueRowCount > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Rendering {Math.min(renderedIssueRowLimit, filtered.length)} of {filtered.length} issues
-            </p>
+          {(remainingIssueRowCount > 0 || hasMoreIssues || isLoadingMoreIssues) && (
+            <div className="py-2" data-testid="issues-load-more-sentinel">
+              <p className="text-xs text-muted-foreground">
+                {isLoadingMoreIssues
+                  ? "Loading more issues..."
+                  : remainingIssueRowCount > 0
+                    ? `Rendering ${Math.min(renderedIssueRowLimit, filtered.length)} of ${filtered.length} issues`
+                    : "Scroll to load more issues"}
+              </p>
+            </div>
           )}
         </>
       )}

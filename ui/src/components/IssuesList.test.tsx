@@ -222,6 +222,20 @@ async function waitForMicrotaskAssertion(assertion: () => void, attempts = 20) {
   throw lastError;
 }
 
+function setDocumentScrollMetrics({
+  innerHeight,
+  scrollY,
+  scrollHeight,
+}: {
+  innerHeight: number;
+  scrollY: number;
+  scrollHeight: number;
+}) {
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: innerHeight });
+  Object.defineProperty(window, "scrollY", { configurable: true, value: scrollY });
+  Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: scrollHeight });
+}
+
 function renderWithQueryClient(node: ReactNode, container: HTMLDivElement) {
   const root = createRoot(container);
   const queryClient = new QueryClient({
@@ -269,6 +283,7 @@ describe("IssuesList", () => {
     mockExecutionWorkspacesApi.list.mockResolvedValue([]);
     mockExecutionWorkspacesApi.listSummaries.mockResolvedValue([]);
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false });
+    setDocumentScrollMetrics({ innerHeight: 600, scrollY: 0, scrollHeight: 2400 });
     localStorage.clear();
   });
 
@@ -847,6 +862,86 @@ describe("IssuesList", () => {
     await waitForAssertion(() => {
       expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(100);
       expect(container.textContent).toContain("Rendering 100 of 220 issues");
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("renders the next local issue batch after scrolling near the bottom", async () => {
+    const manyIssues = Array.from({ length: 220 }, (_, index) =>
+      createIssue({
+        id: `issue-${index + 1}`,
+        identifier: `PAP-${index + 1}`,
+        title: `Issue ${index + 1}`,
+      }),
+    );
+
+    const { root } = renderWithQueryClient(
+      <IssuesList
+        issues={manyIssues}
+        agents={[]}
+        projects={[]}
+        viewStateKey="paperclip:test-issues"
+        onUpdateIssue={() => undefined}
+      />,
+      container,
+    );
+
+    await waitForAssertion(() => {
+      expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(100);
+    });
+
+    act(() => {
+      setDocumentScrollMetrics({ innerHeight: 600, scrollY: 1500, scrollHeight: 2000 });
+      window.dispatchEvent(new Event("scroll"));
+    });
+
+    await waitForAssertion(() => {
+      expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(220);
+      expect(container.textContent).not.toContain("Rendering 100 of 220 issues");
+    });
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it("requests more server issues after scrolling past the rendered rows", async () => {
+    const visibleIssues = Array.from({ length: 100 }, (_, index) =>
+      createIssue({
+        id: `issue-${index + 1}`,
+        identifier: `PAP-${index + 1}`,
+        title: `Issue ${index + 1}`,
+      }),
+    );
+    const onLoadMoreIssues = vi.fn();
+
+    const { root } = renderWithQueryClient(
+      <IssuesList
+        issues={visibleIssues}
+        agents={[]}
+        projects={[]}
+        viewStateKey="paperclip:test-issues"
+        hasMoreIssues
+        onLoadMoreIssues={onLoadMoreIssues}
+        onUpdateIssue={() => undefined}
+      />,
+      container,
+    );
+
+    await waitForAssertion(() => {
+      expect(container.querySelectorAll('[data-testid="issue-row"]')).toHaveLength(100);
+    });
+
+    act(() => {
+      setDocumentScrollMetrics({ innerHeight: 600, scrollY: 1500, scrollHeight: 2000 });
+      window.dispatchEvent(new Event("scroll"));
+    });
+
+    await waitForAssertion(() => {
+      expect(onLoadMoreIssues).toHaveBeenCalledTimes(1);
     });
 
     act(() => {

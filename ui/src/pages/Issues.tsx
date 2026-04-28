@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import { useLocation, useSearchParams } from "@/lib/router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { issuesApi } from "../api/issues";
@@ -15,6 +15,17 @@ import { IssuesList } from "../components/IssuesList";
 import { CircleDot } from "lucide-react";
 
 const WORKSPACE_FILTER_ISSUE_LIMIT = 1000;
+const ISSUES_PAGE_INITIAL_LIMIT = 500;
+const ISSUES_PAGE_LIMIT_INCREMENT = 250;
+const ISSUES_PAGE_MAX_LIMIT = 1000;
+
+export function getNextIssuesPageLimit(currentLimit: number): number {
+  return Math.min(ISSUES_PAGE_MAX_LIMIT, currentLimit + ISSUES_PAGE_LIMIT_INCREMENT);
+}
+
+export function hasMoreIssuesToRequest(loadedIssueCount: number, currentLimit: number): boolean {
+  return loadedIssueCount >= currentLimit && currentLimit < ISSUES_PAGE_MAX_LIMIT;
+}
 
 export function buildIssuesSearchUrl(currentHref: string, search: string): string | null {
   const url = new URL(currentHref);
@@ -36,12 +47,15 @@ export function Issues() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const [issueListLimit, setIssueListLimit] = useState(ISSUES_PAGE_INITIAL_LIMIT);
 
   const initialSearch = searchParams.get("q") ?? "";
+  const [syncedSearch, setSyncedSearch] = useState(initialSearch);
   const participantAgentId = searchParams.get("participantAgentId") ?? undefined;
   const initialWorkspaces = searchParams.getAll("workspace").filter((workspaceId) => workspaceId.length > 0);
   const workspaceIdFilter = initialWorkspaces.length === 1 ? initialWorkspaces[0] : undefined;
   const handleSearchChange = useCallback((search: string) => {
+    setSyncedSearch(search);
     const nextUrl = buildIssuesSearchUrl(window.location.href, search);
     if (!nextUrl) return;
     window.history.replaceState(window.history.state, "", nextUrl);
@@ -82,7 +96,17 @@ export function Issues() {
     setBreadcrumbs([{ label: "Issues" }]);
   }, [setBreadcrumbs]);
 
-  const { data: issues, isLoading, error } = useQuery({
+  const effectiveIssueListLimit = workspaceIdFilter ? WORKSPACE_FILTER_ISSUE_LIMIT : issueListLimit;
+
+  useEffect(() => {
+    setSyncedSearch(initialSearch);
+  }, [initialSearch]);
+
+  useEffect(() => {
+    setIssueListLimit(ISSUES_PAGE_INITIAL_LIMIT);
+  }, [participantAgentId, workspaceIdFilter, selectedCompanyId, syncedSearch]);
+
+  const { data: issues, isLoading, isFetching, error } = useQuery({
     queryKey: [
       ...queryKeys.issues.list(selectedCompanyId!),
       "participant-agent",
@@ -90,15 +114,26 @@ export function Issues() {
       "workspace",
       workspaceIdFilter ?? "__all__",
       "with-routine-executions",
+      "limit",
+      effectiveIssueListLimit,
     ],
     queryFn: () => issuesApi.list(selectedCompanyId!, {
       participantAgentId,
       workspaceId: workspaceIdFilter,
       includeRoutineExecutions: true,
-      ...(workspaceIdFilter ? { limit: WORKSPACE_FILTER_ISSUE_LIMIT } : {}),
+      limit: effectiveIssueListLimit,
     }),
     enabled: !!selectedCompanyId,
+    placeholderData: (previousData) => previousData,
   });
+
+  const hasMoreServerIssues = !workspaceIdFilter
+    && syncedSearch.trim().length === 0
+    && hasMoreIssuesToRequest(issues?.length ?? 0, issueListLimit);
+  const loadMoreServerIssues = useCallback(() => {
+    if (workspaceIdFilter) return;
+    setIssueListLimit((current) => getNextIssuesPageLimit(current));
+  }, [workspaceIdFilter]);
 
   const updateIssue = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
@@ -116,6 +151,7 @@ export function Issues() {
     <IssuesList
       issues={issues ?? []}
       isLoading={isLoading}
+      isLoadingMoreIssues={isFetching && !isLoading}
       error={error as Error | null}
       agents={agents}
       projects={projects}
@@ -124,9 +160,11 @@ export function Issues() {
       issueLinkState={issueLinkState}
       initialAssignees={searchParams.get("assignee") ? [searchParams.get("assignee")!] : undefined}
       initialWorkspaces={initialWorkspaces.length > 0 ? initialWorkspaces : undefined}
-      initialSearch={initialSearch}
+      initialSearch={syncedSearch}
       onSearchChange={handleSearchChange}
       enableRoutineVisibilityFilter
+      hasMoreIssues={hasMoreServerIssues}
+      onLoadMoreIssues={loadMoreServerIssues}
       onUpdateIssue={(id, data) => updateIssue.mutate({ id, data })}
       searchFilters={participantAgentId || workspaceIdFilter ? { participantAgentId, workspaceId: workspaceIdFilter } : undefined}
     />

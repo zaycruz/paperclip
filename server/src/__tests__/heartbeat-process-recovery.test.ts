@@ -2339,4 +2339,75 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
     expect(runs).toHaveLength(1);
   });
+
+  it("suppresses bounded liveness continuation wakes when the issue is held by an active pause hold", async () => {
+    const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
+      status: "in_progress",
+      runStatus: "succeeded",
+      livenessState: "plan_only",
+      livenessReason: "Run made no concrete progress",
+      nextAction: "Take the first concrete action now.",
+      activePauseHold: true,
+    });
+    const heartbeat = heartbeatService(db);
+
+    const sourceRun = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId))
+      .then((rows) => rows[0] ?? null);
+    if (!sourceRun) throw new Error("Expected source run");
+
+    await heartbeat.handleRunLivenessContinuationForTest(sourceRun);
+
+    const wakeups = await db
+      .select()
+      .from(agentWakeupRequests)
+      .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.reason, "run_liveness_continuation")));
+    expect(wakeups).toHaveLength(0);
+
+    const refreshedRun = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId))
+      .then((rows) => rows[0] ?? null);
+    expect(refreshedRun?.continuationAttempt).toBe(0);
+    expect(refreshedRun?.livenessReason).toContain("continuation suppressed by active pause hold");
+
+    const recoveryIssues = await db
+      .select()
+      .from(issues)
+      .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "stranded_issue_recovery")));
+    expect(recoveryIssues).toHaveLength(0);
+
+    const refreshedIssue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0] ?? null);
+    expect(refreshedIssue?.status).toBe("in_progress");
+    expect(refreshedIssue?.assigneeAgentId).toBe(agentId);
+  });
+
+  it("queues a bounded liveness continuation when no pause hold suppresses it", async () => {
+    const { companyId, runId } = await seedStrandedIssueFixture({
+      status: "in_progress",
+      runStatus: "succeeded",
+      livenessState: "plan_only",
+      livenessReason: "Run made no concrete progress",
+      nextAction: "Take the first concrete action now.",
+    });
+    const heartbeat = heartbeatService(db);
+
+    const sourceRun = await db
+      .select()
+      .from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId))
+      .then((rows) => rows[0] ?? null);
+    if (!sourceRun) throw new Error("Expected source run");
+
+    await heartbeat.handleRunLivenessContinuationForTest(sourceRun);
+
+    const wakeups = await db
+      .select()
+      .from(agentWakeupRequests)
+      .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.reason, "run_liveness_continuation")));
+    expect(wakeups).toHaveLength(1);
+  });
 });

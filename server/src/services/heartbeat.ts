@@ -2833,6 +2833,14 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         });
         return;
       }
+
+      if (await isAutomaticRecoverySuppressedByPauseHold(db, issue.companyId, issue.id, treeControlSvc)) {
+        await setRunStatus(run.id, run.status, {
+          livenessReason:
+            `${run.livenessReason ?? "Run ended without concrete progress"}; continuation suppressed by active pause hold`,
+        });
+        return;
+      }
     }
 
     const nextAttempt = readContinuationAttempt(run.continuationAttempt) + 1;
@@ -3653,6 +3661,88 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
               scheduledRetryReason: cancelled.scheduledRetryReason,
               previousRetryAgentId: cancelled.agentId,
               currentAssigneeAgentId: issue.assigneeAgentId,
+            },
+          });
+          continue;
+        }
+
+        const activePauseHold = await treeControlSvc.getActivePauseHoldGate(dueRun.companyId, dueRunIssueId);
+        if (activePauseHold) {
+          const reason = "Cancelled because issue is held by an active subtree pause hold";
+          const cancelled = await db
+            .update(heartbeatRuns)
+            .set({
+              status: "cancelled",
+              finishedAt: now,
+              error: reason,
+              errorCode: "issue_paused",
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(heartbeatRuns.id, dueRun.id),
+                eq(heartbeatRuns.status, "scheduled_retry"),
+                lte(heartbeatRuns.scheduledRetryAt, now),
+              ),
+            )
+            .returning()
+            .then((rows) => rows[0] ?? null);
+
+          if (!cancelled) continue;
+
+          if (cancelled.wakeupRequestId) {
+            await db
+              .update(agentWakeupRequests)
+              .set({
+                status: "cancelled",
+                finishedAt: now,
+                error: reason,
+                updatedAt: now,
+              })
+              .where(eq(agentWakeupRequests.id, cancelled.wakeupRequestId));
+          }
+
+          if (issue && issue.executionRunId === cancelled.id) {
+            await db
+              .update(issues)
+              .set({
+                executionRunId: null,
+                executionAgentNameKey: null,
+                executionLockedAt: null,
+                updatedAt: now,
+              })
+              .where(and(eq(issues.id, issue.id), eq(issues.executionRunId, cancelled.id)));
+          }
+
+          await appendRunEvent(cancelled, await nextRunEventSeq(cancelled.id), {
+            eventType: "lifecycle",
+            stream: "system",
+            level: "warn",
+            message: "Scheduled retry cancelled because issue is held by an active subtree pause hold",
+            payload: {
+              issueId: dueRunIssueId,
+              holdId: activePauseHold.holdId,
+              rootIssueId: activePauseHold.rootIssueId,
+              scheduledRetryAttempt: cancelled.scheduledRetryAttempt,
+              scheduledRetryAt: cancelled.scheduledRetryAt ? new Date(cancelled.scheduledRetryAt).toISOString() : null,
+              scheduledRetryReason: cancelled.scheduledRetryReason,
+            },
+          });
+
+          await logActivity(db, {
+            companyId: cancelled.companyId,
+            actorType: "system",
+            actorId: "system",
+            agentId: cancelled.agentId,
+            runId: cancelled.id,
+            action: "issue.tree_hold_run_interrupted",
+            entityType: "heartbeat_run",
+            entityId: cancelled.id,
+            details: {
+              issueId: dueRunIssueId,
+              holdId: activePauseHold.holdId,
+              rootIssueId: activePauseHold.rootIssueId,
+              source: "heartbeat.promote_due_scheduled_retries",
             },
           });
           continue;
@@ -7496,6 +7586,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     reportRunActivity: clearDetachedRunWarning,
 
     reapOrphanedRuns,
+
+    handleRunLivenessContinuationForTest: handleRunLivenessContinuation,
 
     promoteDueScheduledRetries,
 

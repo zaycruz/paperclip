@@ -124,6 +124,7 @@ interface IssueChatMessageContext {
   onStopRun?: (runId: string) => Promise<void>;
   stopRunLabel?: string;
   stoppingRunLabel?: string;
+  stopRunVariant?: "stop" | "pause";
   onInterruptQueued?: (runId: string) => Promise<void>;
   onCancelQueued?: (commentId: string) => void;
   onImageClick?: (src: string) => void;
@@ -280,6 +281,7 @@ interface IssueChatThreadProps {
   onStopRun?: (runId: string) => Promise<void>;
   stopRunLabel?: string;
   stoppingRunLabel?: string;
+  stopRunVariant?: "stop" | "pause";
   imageUploadHandler?: (file: File) => Promise<string>;
   onAttachImage?: (file: File) => Promise<IssueAttachment | void>;
   draftKey?: string;
@@ -1347,6 +1349,7 @@ function IssueChatAssistantMessage({
     onStopRun,
     stopRunLabel = "Stop run",
     stoppingRunLabel = "Stopping...",
+    stopRunVariant = "stop",
   } = useContext(IssueChatCtx);
   const custom = message.metadata.custom as Record<string, unknown>;
   const anchorId = typeof custom.anchorId === "string" ? custom.anchorId : undefined;
@@ -1541,7 +1544,7 @@ function IssueChatAssistantMessage({
                         <DropdownMenuItem
                           disabled={isStoppingRun}
                           className={cn(
-                            stopRunLabel.toLowerCase().includes("pause")
+                            stopRunVariant === "pause"
                               ? "text-amber-700 focus:text-amber-800 dark:text-amber-300 dark:focus:text-amber-200"
                               : "text-red-700 focus:text-red-800 dark:text-red-300 dark:focus:text-red-200",
                           )}
@@ -1549,7 +1552,7 @@ function IssueChatAssistantMessage({
                             void onStopRun(runId);
                           }}
                         >
-                          {stopRunLabel.toLowerCase().includes("pause") ? (
+                          {stopRunVariant === "pause" ? (
                             <PauseCircle className="mr-2 h-3.5 w-3.5" />
                           ) : (
                             <Square className="mr-2 h-3.5 w-3.5 fill-current" />
@@ -3087,6 +3090,7 @@ export function IssueChatThread({
   onStopRun,
   stopRunLabel,
   stoppingRunLabel,
+  stopRunVariant,
   imageUploadHandler,
   onAttachImage,
   draftKey,
@@ -3528,6 +3532,7 @@ export function IssueChatThread({
       onStopRun: stableOnStopRun,
       stopRunLabel,
       stoppingRunLabel,
+      stopRunVariant,
       onInterruptQueued: stableOnInterruptQueued,
       onCancelQueued: stableOnCancelQueued,
       onImageClick: stableOnImageClick,
@@ -3547,6 +3552,7 @@ export function IssueChatThread({
       stableOnStopRun,
       stopRunLabel,
       stoppingRunLabel,
+      stopRunVariant,
       stableOnInterruptQueued,
       stableOnCancelQueued,
       stableOnImageClick,

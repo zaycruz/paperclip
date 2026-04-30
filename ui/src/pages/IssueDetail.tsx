@@ -158,6 +158,7 @@ type IssueDetailComment = (IssueComment | OptimisticIssueComment) & {
 const FEEDBACK_TERMS_URL = import.meta.env.VITE_FEEDBACK_TERMS_URL?.trim() || "https://paperclip.ing/tos";
 const ISSUE_COMMENT_PAGE_SIZE = 50;
 const ISSUE_COMMENT_AUTOLOAD_LIMIT = ISSUE_COMMENT_PAGE_SIZE * 3;
+const JUMP_TO_LATEST_MAX_COMMENT_PAGES = 10;
 const TREE_CONTROL_MODE_LABEL: Record<IssueTreeControlMode, string> = {
   pause: "Pause subtree",
   resume: "Resume subtree",
@@ -858,6 +859,7 @@ const IssueDetailChatTab = memo(function IssueDetailChatTab({
         onStopRun={onPauseWorkRun}
         stopRunLabel="Pause work"
         stoppingRunLabel="Pausing..."
+        stopRunVariant="pause"
         onAcceptInteraction={onAcceptInteraction}
         onRejectInteraction={onRejectInteraction}
         onSubmitInteractionAnswers={(interaction, answers) =>
@@ -2702,6 +2704,7 @@ export function IssueDetail() {
       pages: refreshed.data?.pages,
       pageParams: refreshed.data?.pageParams as Array<string | null> | undefined,
       pageSize: ISSUE_COMMENT_PAGE_SIZE,
+      maxPages: JUMP_TO_LATEST_MAX_COMMENT_PAGES,
       fetchPage: (afterCommentId) =>
         issuesApi.listComments(issueId!, {
           order: "desc",

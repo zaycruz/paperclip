@@ -2100,21 +2100,6 @@ export function issueRoutes(
       });
       return;
     }
-    if (
-      req.actor.type === "agent" &&
-      req.body.assigneeUserId !== undefined &&
-      req.body.assigneeUserId !== existing.assigneeUserId
-    ) {
-      res.status(403).json({
-        error: "Agents cannot assign issues to users",
-        details: {
-          issueId: existing.id,
-          assigneeUserId: req.body.assigneeUserId ?? null,
-          securityPrinciples: ["Least Privilege", "Complete Mediation", "Fail Securely"],
-        },
-      });
-      return;
-    }
     if (normalizedAssigneeAgentId !== undefined) {
       updateFields.assigneeAgentId = normalizedAssigneeAgentId;
     }
@@ -2147,6 +2132,22 @@ export function issueRoutes(
       };
     }
     Object.assign(updateFields, transition.patch);
+    if (
+      req.actor.type === "agent" &&
+      req.body.assigneeUserId !== undefined &&
+      req.body.assigneeUserId !== existing.assigneeUserId &&
+      !transition.workflowControlledAssignment
+    ) {
+      res.status(403).json({
+        error: "Agents cannot assign issues to users",
+        details: {
+          issueId: existing.id,
+          assigneeUserId: req.body.assigneeUserId ?? null,
+          securityPrinciples: ["Least Privilege", "Complete Mediation", "Fail Securely"],
+        },
+      });
+      return;
+    }
     if (reviewRequest !== undefined && transition.patch.executionState === undefined) {
       const existingExecutionState = parseIssueExecutionState(existing.executionState);
       if (!existingExecutionState || existingExecutionState.status !== "pending") {

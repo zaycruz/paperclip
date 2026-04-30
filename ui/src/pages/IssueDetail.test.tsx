@@ -1174,9 +1174,11 @@ describe("IssueDetail", () => {
     await flushReact();
     await flushReact();
 
-    expect(container.textContent).toContain("Paused by board.");
-    expect(container.textContent).toContain("in_review");
-    expect(container.textContent).not.toContain("Subtree pause is active.");
+    await waitForAssertion(() => {
+      expect(container.textContent).toContain("Paused by board.");
+      expect(container.textContent).toContain("in_review");
+      expect(container.textContent).not.toContain("Subtree pause is active.");
+    });
 
     const resumeButton = Array.from(container.querySelectorAll("button"))
       .find((button) => button.textContent?.trim() === "Resume work");

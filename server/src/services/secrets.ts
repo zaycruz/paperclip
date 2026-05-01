@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, companySecrets, companySecretVersions } from "@paperclipai/db";
 import type { AgentEnvConfig, EnvBinding, SecretProvider } from "@paperclipai/shared";
@@ -176,7 +176,12 @@ export function secretService(db: Db) {
         adapterConfig: agents.adapterConfig,
       })
       .from(agents)
-      .where(eq(agents.companyId, companyId));
+      .where(
+        and(
+          eq(agents.companyId, companyId),
+          sql`jsonb_path_exists(${agents.adapterConfig}, '$.env.* ? (@.type == "secret_ref")')`,
+        ),
+      );
 
     const references = new Map<
       string,

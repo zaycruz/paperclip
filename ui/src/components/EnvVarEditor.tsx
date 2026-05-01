@@ -12,6 +12,7 @@ type Row = {
   source: "plain" | "secret";
   plainValue: string;
   secretId: string;
+  fallbackBinding?: EnvBinding;
 };
 
 function toRows(rec: Record<string, EnvBinding> | null | undefined): Row[] {
@@ -20,7 +21,13 @@ function toRows(rec: Record<string, EnvBinding> | null | undefined): Row[] {
   }
   const entries = Object.entries(rec).map(([key, binding]) => {
     if (typeof binding === "string") {
-      return { key, source: "plain" as const, plainValue: binding, secretId: "" };
+      return {
+        key,
+        source: "plain" as const,
+        plainValue: binding,
+        secretId: "",
+        fallbackBinding: binding,
+      };
     }
     if (
       typeof binding === "object" &&
@@ -34,6 +41,7 @@ function toRows(rec: Record<string, EnvBinding> | null | undefined): Row[] {
         source: "secret" as const,
         plainValue: "",
         secretId: typeof record.secretId === "string" ? record.secretId : "",
+        fallbackBinding: binding,
       };
     }
     if (
@@ -48,6 +56,7 @@ function toRows(rec: Record<string, EnvBinding> | null | undefined): Row[] {
         source: "plain" as const,
         plainValue: typeof record.value === "string" ? record.value : "",
         secretId: "",
+        fallbackBinding: binding,
       };
     }
     return { key, source: "plain" as const, plainValue: "", secretId: "" };
@@ -88,6 +97,8 @@ export function EnvVarEditor({
       if (row.source === "secret") {
         if (row.secretId) {
           rec[key] = { type: "secret_ref", secretId: row.secretId, version: "latest" };
+        } else if (row.fallbackBinding !== undefined) {
+          rec[key] = row.fallbackBinding;
         }
       } else {
         rec[key] = { type: "plain", value: row.plainValue };

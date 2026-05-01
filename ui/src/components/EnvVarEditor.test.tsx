@@ -111,4 +111,35 @@ describe("EnvVarEditor", () => {
       root.unmount();
     });
   });
+
+  it("preserves an existing value while a secret replacement is incomplete", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const onChange = vi.fn();
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <EnvVarEditor
+          value={{ OPENAI_API_KEY: { type: "plain", value: "existing-value" } }}
+          secrets={[secret]}
+          onChange={onChange}
+        />,
+      );
+    });
+
+    const sourceSelect = container.querySelector("select") as HTMLSelectElement;
+    await act(async () => {
+      setSelectValue(sourceSelect, "secret");
+    });
+
+    expect(sourceSelect.value).toBe("secret");
+    expect(onChange).toHaveBeenLastCalledWith({
+      OPENAI_API_KEY: { type: "plain", value: "existing-value" },
+    } satisfies Record<string, EnvBinding>);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

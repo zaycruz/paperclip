@@ -2221,7 +2221,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("does not treat a productive terminal run as healthy when in-progress work has no live path", async () => {
-    const { companyId, agentId, issueId } = await seedStrandedIssueFixture({
+    const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
       status: "in_progress",
       runStatus: "succeeded",
       retryReason: "issue_continuation_needed",
@@ -2259,15 +2259,21 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .select()
       .from(issues)
       .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "stranded_issue_recovery")));
-    const followupWakeups = await db
-      .select()
-      .from(agentWakeupRequests)
-      .where(and(eq(agentWakeupRequests.companyId, companyId), inArray(agentWakeupRequests.status, ["queued", "deferred_issue_execution"])));
     const followupRuns = await db
       .select()
       .from(heartbeatRuns)
-      .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.status, ["queued", "running", "scheduled_retry"])));
-    expect(comments.length + recoveryIssues.length + followupWakeups.length + followupRuns.length).toBeGreaterThan(0);
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+    expect(comments).toHaveLength(0);
+    expect(recoveryIssues).toHaveLength(0);
+    expect(followupRuns).toHaveLength(2);
+    const retryRun = followupRuns.find((row) => row.id !== runId);
+    expect(retryRun?.contextSnapshot as Record<string, unknown> | undefined).toMatchObject({
+      issueId,
+      taskId: issueId,
+      retryReason: "issue_continuation_needed",
+      retryOfRunId: runId,
+      source: "issue.productive_terminal_continuation_recovery",
+    });
   });
 
   it("does not reconcile user-assigned work through the agent stranded-work recovery path", async () => {

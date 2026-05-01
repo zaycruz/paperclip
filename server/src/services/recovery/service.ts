@@ -1707,10 +1707,6 @@ export function recoveryService(db: Db, deps: { enqueueWakeup: RecoveryWakeup })
       }
       if (isSuccessfulInProgressContinuationRun(latestRun)) {
         const successfulRun = latestRun;
-        if (!successfulRun) {
-          result.skipped += 1;
-          continue;
-        }
 
         if (!isProductiveContinuationRun(successfulRun)) {
           result.successfulContinuationObserved += 1;

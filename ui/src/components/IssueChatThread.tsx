@@ -94,7 +94,10 @@ import { formatAssigneeUserLabel } from "../lib/assignees";
 import { useOptionalToastActions } from "../context/ToastContext";
 import type { CompanyUserProfile } from "../lib/company-members";
 import { timeAgo } from "../lib/timeAgo";
-import { isSuccessfulRunHandoffComment } from "../lib/successful-run-handoff";
+import {
+  isSuccessfulRunHandoffComment,
+  isSuccessfulRunHandoffEscalationComment,
+} from "../lib/successful-run-handoff";
 import {
   describeToolInput,
   displayToolName,
@@ -610,7 +613,8 @@ export function SuccessfulRunHandoffCommentCallout({
   recessed?: boolean;
   onImageClick?: (src: string) => void;
 }) {
-  const escalated = /^##\s+Run finished without a next step/i.test(text.trim());
+  const escalated = isSuccessfulRunHandoffEscalationComment(text)
+    || /^##\s+Run finished without a next step/i.test(text.trim());
   return (
     <div
       className={cn(

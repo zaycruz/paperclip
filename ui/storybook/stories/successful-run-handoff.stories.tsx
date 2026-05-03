@@ -10,29 +10,14 @@ import { formatIssueActivityAction } from "@/lib/activity-format";
 import {
   SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION,
   SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION,
+  SUCCESSFUL_RUN_HANDOFF_RESOLVED_ACTION,
+  successfulRunHandoffActivityTone,
 } from "@/lib/successful-run-handoff";
 import { createIssue, storybookAgents } from "../fixtures/paperclipData";
 
-function activityTone(action: string) {
-  if (action === SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION) {
-    return {
-      className: "border-red-500/35 bg-red-500/10 text-red-950 dark:text-red-100",
-      iconClassName: "text-red-600 dark:text-red-300",
-    };
-  }
-  if (action === SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION) {
-    return {
-      className:
-        "border-amber-300/70 bg-amber-50/90 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100",
-      iconClassName: "text-amber-600 dark:text-amber-300",
-    };
-  }
-  return { className: "border-border/60 text-muted-foreground", iconClassName: "text-muted-foreground" };
-}
-
 function ActivityExample({ action }: { action: string }) {
-  const tone = activityTone(action);
-  const isWarning = action !== "issue.successful_run_handoff_resolved";
+  const tone = successfulRunHandoffActivityTone(action);
+  const isWarning = action !== SUCCESSFUL_RUN_HANDOFF_RESOLVED_ACTION;
   return (
     <div className={cn("space-y-1.5 rounded-lg border px-3 py-2 text-xs", tone.className)}>
       <div className="flex items-center gap-1.5">
@@ -155,16 +140,19 @@ function EscalationCommentPanel() {
       <div className="mb-3 text-sm font-medium text-muted-foreground">D. Escalation comment callout</div>
       <SuccessfulRunHandoffCommentCallout
         text={[
-          "## Run finished without a next step - recovery escalated",
+          "Paperclip exhausted the bounded successful-run handoff correction for this issue, but it still has no clear next-step disposition.",
           "",
-          "The corrective wake did not leave a clear next step.",
+          "- Source issue: [PAP-3053](/PAP/issues/PAP-3053)",
+          "- Source run: [`9cdba892-c7ca-4d93-8604-4843873b127c`](/PAP/agents/agent-codex/runs/9cdba892-c7ca-4d93-8604-4843873b127c)",
+          "- Corrective handoff run: [`61fdb79b-8012-4676-ac71-2971830e126a`](/PAP/agents/agent-codex/runs/61fdb79b-8012-4676-ac71-2971830e126a)",
+          "- Source assignee: [CodexCoder](/PAP/agents/codexcoder)",
+          "- Latest issue status: `in_progress`",
+          "- Latest handoff run status: `succeeded`",
+          "- Normalized cause: `successful_run_missing_state`",
+          "- Missing disposition: `no_clear_next_step`",
+          "- Suggested manager action: choose and record a valid issue disposition without copying transcript content.",
           "",
-          "- Source run: [9cdba892](/agents/agent-codex/runs/9cdba892-c7ca-4d93-8604-4843873b127c)",
-          "- Corrective run: [61fdb79b](/agents/agent-codex/runs/61fdb79b-8012-4676-ac71-2971830e126a)",
-          "- Cause: Run finished, but the issue was left without a clear next step.",
-          "- Current issue state: `in_progress` assigned to CodexCoder",
-          "",
-          "Next action: the recovery owner should inspect the issue and choose a valid next-step outcome.",
+          "Moving it to `blocked` with an explicit recovery owner so the next action is visible.",
         ].join("\n")}
       />
     </div>

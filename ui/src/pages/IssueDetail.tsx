@@ -104,7 +104,11 @@ import { buildIssuePropertiesPanelKey } from "../lib/issue-properties-panel-key"
 import { shouldRenderRichSubIssuesSection } from "../lib/issue-detail-subissues";
 import { filterIssueDescendants } from "../lib/issue-tree";
 import { buildSubIssueDefaultsForViewer } from "../lib/subIssueDefaults";
-import { SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION, SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION } from "../lib/successful-run-handoff";
+import {
+  SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION,
+  SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION,
+  successfulRunHandoffActivityTone,
+} from "../lib/successful-run-handoff";
 import {
   Activity as ActivityIcon,
   AlertTriangle,
@@ -162,25 +166,6 @@ const FEEDBACK_TERMS_URL = import.meta.env.VITE_FEEDBACK_TERMS_URL?.trim() || "h
 const ISSUE_COMMENT_PAGE_SIZE = 50;
 const ISSUE_COMMENT_AUTOLOAD_LIMIT = ISSUE_COMMENT_PAGE_SIZE * 3;
 const JUMP_TO_LATEST_MAX_COMMENT_PAGES = 10;
-function issueActivityEventTone(action: string) {
-  if (action === SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION) {
-    return {
-      className: "border-red-500/35 bg-red-500/10 text-red-950 dark:text-red-100",
-      iconClassName: "text-red-600 dark:text-red-300",
-    };
-  }
-  if (action === SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION) {
-    return {
-      className: "border-amber-300/70 bg-amber-50/90 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100",
-      iconClassName: "text-amber-600 dark:text-amber-300",
-    };
-  }
-  return {
-    className: "border-border/60 text-muted-foreground",
-    iconClassName: "text-muted-foreground",
-  };
-}
-
 const TREE_CONTROL_MODE_LABEL: Record<IssueTreeControlMode, string> = {
   pause: "Pause subtree",
   resume: "Resume subtree",
@@ -1090,7 +1075,7 @@ function IssueDetailActivityTab({
           hasLiveRuns={hasLiveRuns}
           activityEvents={activity ?? []}
           renderActivityEvent={(evt) => {
-            const tone = issueActivityEventTone(evt.action);
+            const tone = successfulRunHandoffActivityTone(evt.action);
             const isHandoffWarning =
               evt.action === SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION
               || evt.action === SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION;

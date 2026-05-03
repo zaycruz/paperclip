@@ -170,6 +170,7 @@ export function redactDetectedSuccessfulRunProgressSummaryForBoard(
   const redacted = redactSensitiveText(redactCurrentUserText(normalized, currentUserRedactionOptions));
   return redacted.length <= 280 ? redacted : `${redacted.slice(0, 277)}...`;
 }
+
 const MAX_RUN_EVENT_PAYLOAD_OBJECT_KEYS = 100;
 const MAX_RUN_EVENT_PAYLOAD_DEPTH = 6;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = AGENT_DEFAULT_MAX_CONCURRENT_RUNS;

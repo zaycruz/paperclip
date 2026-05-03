@@ -54,5 +54,30 @@ export function successfulRunHandoffFromActivity(event: ActivityEvent): Successf
 }
 
 export function isSuccessfulRunHandoffComment(text: string) {
-  return /^##\s+(This issue still needs a next step|Run finished without a next step)/i.test(text.trim());
+  const trimmed = text.trim();
+  return /^##\s+(This issue still needs a next step|Run finished without a next step)/i.test(trimmed)
+    || isSuccessfulRunHandoffEscalationComment(trimmed);
+}
+
+export function isSuccessfulRunHandoffEscalationComment(text: string) {
+  return /^Paperclip exhausted the bounded successful-run handoff correction\b/i.test(text.trim());
+}
+
+export function successfulRunHandoffActivityTone(action: string) {
+  if (action === SUCCESSFUL_RUN_HANDOFF_ESCALATED_ACTION) {
+    return {
+      className: "border-red-500/35 bg-red-500/10 text-red-950 dark:text-red-100",
+      iconClassName: "text-red-600 dark:text-red-300",
+    };
+  }
+  if (action === SUCCESSFUL_RUN_HANDOFF_REQUIRED_ACTION) {
+    return {
+      className: "border-amber-300/70 bg-amber-50/90 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100",
+      iconClassName: "text-amber-600 dark:text-amber-300",
+    };
+  }
+  return {
+    className: "border-border/60 text-muted-foreground",
+    iconClassName: "text-muted-foreground",
+  };
 }

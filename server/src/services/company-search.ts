@@ -17,10 +17,14 @@ import {
 const MIN_TOKEN_LENGTH = 2;
 const MIN_FUZZY_QUERY_LENGTH = 4;
 const MIN_FUZZY_TOKEN_LENGTH = 4;
-const FUZZY_DROP_ONE_MIN_LENGTH = 5;
-const FUZZY_WHOLE_QUERY_THRESHOLD = 0.30;
-const FUZZY_TOKEN_WORD_SIMILARITY_THRESHOLD = 0.50;
-const FUZZY_IDENTIFIER_WORD_SIMILARITY_THRESHOLD = 0.55;
+// Cap fuzzy edits using the shorter of (query token, title word) so common
+// 4–5 letter English words don't sweep in noise (e.g. "serach" vs "each").
+const FUZZY_PAIR_LONG_LENGTH = 6;
+const FUZZY_PAIR_LONG_MAX_EDITS = 2;
+const FUZZY_PAIR_MEDIUM_LENGTH = 5;
+const FUZZY_PAIR_MEDIUM_MAX_EDITS = 1;
+const FUZZY_PAIR_SHORT_MAX_EDITS = 0;
+const FUZZY_IDENTIFIER_SIMILARITY_THRESHOLD = 0.45;
 const SNIPPET_MAX_CHARS = 240;
 export const COMPANY_SEARCH_BRANCH_FETCH_LIMIT = COMPANY_SEARCH_MAX_LIMIT + 1;
 
@@ -68,22 +72,8 @@ function tokenizeQuery(normalizedQuery: string) {
   return tokens;
 }
 
-// Build fuzzy variants for each query token. Trigram similarity collapses on
-// transposition (e.g. "serach" → "search") because every adjacent swap breaks
-// multiple trigrams. Pre-computing drop-one-character variants (e.g. "serch")
-// lets pg_trgm's word_similarity recover those typos via a near-substring match.
-function fuzzyVariantsForTokens(tokens: string[]): string[] {
-  const variants = new Set<string>();
-  for (const token of tokens) {
-    if (token.length < MIN_FUZZY_TOKEN_LENGTH) continue;
-    variants.add(token);
-    if (token.length < FUZZY_DROP_ONE_MIN_LENGTH) continue;
-    for (let index = 0; index < token.length; index += 1) {
-      const variant = token.slice(0, index) + token.slice(index + 1);
-      if (variant.length >= MIN_FUZZY_TOKEN_LENGTH) variants.add(variant);
-    }
-  }
-  return [...variants];
+function fuzzyEligibleTokens(tokens: string[]): string[] {
+  return tokens.filter((token) => token.length >= MIN_FUZZY_TOKEN_LENGTH);
 }
 
 function sqlTextArray(values: string[]) {
@@ -319,12 +309,12 @@ export function companySearchService(db: Db) {
       const prefix = routePrefix(company?.issuePrefix);
       const fetchLimit = companySearchBranchFetchLimit(limit);
       const tokenArray = sqlTextArray(tokens);
-      const fuzzyVariants = fuzzyVariantsForTokens(tokens);
-      const fuzzyVariantArray = sqlTextArray(fuzzyVariants);
+      const fuzzyTokens = fuzzyEligibleTokens(tokens);
+      const fuzzyTokenArray = sqlTextArray(fuzzyTokens);
       const containsPattern = `%${normalizedQuery}%`;
       const startsWithPattern = `${normalizedQuery}%`;
       const fuzzyEnabled = normalizedQuery.length >= MIN_FUZZY_QUERY_LENGTH;
-      const fuzzyTokensEnabled = fuzzyEnabled && fuzzyVariants.length > 0;
+      const fuzzyTokensEnabled = fuzzyEnabled && fuzzyTokens.length > 0;
 
       const titlePhraseMatch = sql<boolean>`lower(${issues.title}) LIKE ${containsPattern}`;
       const titleStartsWith = sql<boolean>`lower(${issues.title}) LIKE ${startsWithPattern}`;
@@ -371,30 +361,40 @@ export function companySearchService(db: Db) {
             )
         )
       `;
+      // Each query token (length >= MIN_FUZZY_TOKEN_LENGTH) must have at least
+      // one title word within Levenshtein edit distance. This handles typos
+      // like "serach" -> "search" (transposition) and "mibile" -> "mobile"
+      // (substitution) without the trigram noise that drop-character variants
+      // produced (e.g. "serac" matching "service"). Edit budget is gated on
+      // the SHORTER of the two strings so 4–5 letter English words don't get
+      // swept in by lev=2 collisions.
+      const fuzzyMaxEditsExpr = sql.raw(
+        `CASE
+          WHEN least(length(qt.value), length(title_word.value)) >= ${FUZZY_PAIR_LONG_LENGTH} THEN ${FUZZY_PAIR_LONG_MAX_EDITS}
+          WHEN least(length(qt.value), length(title_word.value)) >= ${FUZZY_PAIR_MEDIUM_LENGTH} THEN ${FUZZY_PAIR_MEDIUM_MAX_EDITS}
+          ELSE ${FUZZY_PAIR_SHORT_MAX_EDITS}
+        END`,
+      );
+      const fuzzyMinTitleWordLengthExpr = sql.raw(`${MIN_FUZZY_TOKEN_LENGTH}`);
       const fuzzyTokenTitleMatch = fuzzyTokensEnabled
         ? sql<boolean>`
-          EXISTS (
-            SELECT 1
-            FROM unnest(${fuzzyVariantArray}) AS fuzzy_variant(value)
-            WHERE word_similarity(fuzzy_variant.value, lower(${issues.title})) >= ${FUZZY_TOKEN_WORD_SIMILARITY_THRESHOLD}
-          )
+          coalesce((
+            SELECT bool_and(
+              EXISTS (
+                SELECT 1
+                FROM regexp_split_to_table(lower(${issues.title}), '[^a-z0-9]+') AS title_word(value)
+                WHERE length(title_word.value) >= ${fuzzyMinTitleWordLengthExpr}
+                  AND levenshtein_less_equal(qt.value, title_word.value, ${fuzzyMaxEditsExpr}) <= ${fuzzyMaxEditsExpr}
+              )
+            )
+            FROM unnest(${fuzzyTokenArray}) AS qt(value)
+          ), false)
         `
         : positiveSql();
-      const fuzzyTokenIdentifierMatch = fuzzyTokensEnabled
-        ? sql<boolean>`
-          EXISTS (
-            SELECT 1
-            FROM unnest(${fuzzyVariantArray}) AS fuzzy_variant(value)
-            WHERE word_similarity(fuzzy_variant.value, lower(coalesce(${issues.identifier}, ''))) >= ${FUZZY_IDENTIFIER_WORD_SIMILARITY_THRESHOLD}
-          )
-        `
+      const fuzzyIdentifierMatch = fuzzyEnabled
+        ? sql<boolean>`similarity(lower(coalesce(${issues.identifier}, '')), ${normalizedQuery}) >= ${FUZZY_IDENTIFIER_SIMILARITY_THRESHOLD}`
         : positiveSql();
-      const fuzzyWholeQueryMatch = fuzzyEnabled
-        ? sql<boolean>`
-          word_similarity(${normalizedQuery}, lower(${issues.title})) >= ${FUZZY_WHOLE_QUERY_THRESHOLD}
-        `
-        : positiveSql();
-      const fuzzyMatch = sql<boolean>`(${fuzzyTokenTitleMatch} OR ${fuzzyTokenIdentifierMatch} OR ${fuzzyWholeQueryMatch})`;
+      const fuzzyMatch = sql<boolean>`(${fuzzyTokenTitleMatch} OR ${fuzzyIdentifierMatch})`;
       const tokenCoverage = sql<number>`
         (
           SELECT count(*)::int
@@ -447,8 +447,8 @@ export function companySearchService(db: Db) {
       `;
       const matchedFields = sql<string[]>`
         array_remove(ARRAY[
-          CASE WHEN ${identifierPhraseMatch} OR ${identifierTokenMatch} OR ${fuzzyTokenIdentifierMatch} THEN 'identifier' END,
-          CASE WHEN ${titlePhraseMatch} OR ${titleTokenMatch} OR ${fuzzyTokenTitleMatch} OR ${fuzzyWholeQueryMatch} THEN 'title' END,
+          CASE WHEN ${identifierPhraseMatch} OR ${identifierTokenMatch} OR ${fuzzyIdentifierMatch} THEN 'identifier' END,
+          CASE WHEN ${titlePhraseMatch} OR ${titleTokenMatch} OR ${fuzzyTokenTitleMatch} THEN 'title' END,
           CASE WHEN ${descriptionPhraseMatch} OR ${descriptionTokenMatch} THEN 'description' END,
           CASE WHEN ${commentMatch} THEN 'comment' END,
           CASE WHEN ${documentMatch} THEN 'document' END

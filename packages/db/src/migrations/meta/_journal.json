@@ -540,6 +540,13 @@
       "when": 1777821410992,
       "tag": "0076_company_search_document_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1777849000000,
+      "tag": "0077_company_search_fuzzystrmatch",
+      "breakpoints": true
     }
   ]
 }

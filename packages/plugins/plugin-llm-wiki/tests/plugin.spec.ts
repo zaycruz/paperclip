@@ -1373,6 +1373,11 @@ Route sidebar state stays attached to the selected wiki page.
     });
     expect(run.snapshotId).toEqual(expect.any(String));
     expect(harness.dbExecutes.some((execute) => execute.sql.includes("paperclip_source_snapshots"))).toBe(true);
+    const repeatRun = await harness.performAction<{ cursorId: string }>("create-paperclip-distillation-run", {
+      companyId: COMPANY_ID,
+      projectId: issue.projectId,
+    });
+    expect(repeatRun.cursorId).toBe(run.cursorId);
 
     const failed = await harness.performAction<{ cursorAdvanced: boolean }>("record-paperclip-distillation-outcome", {
       companyId: COMPANY_ID,

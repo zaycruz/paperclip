@@ -290,6 +290,12 @@ function contentHash(contents: string): string {
   return createHash("sha256").update(contents, "utf8").digest("hex");
 }
 
+function deterministicUuid(seed: string): string {
+  const hex = createHash("sha256").update(seed, "utf8").digest("hex").slice(0, 32);
+  const variant = ((parseInt(hex.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(18, 20)}-${hex.slice(20, 32)}`;
+}
+
 function byteLength(contents: string): number {
   return Buffer.byteLength(contents, "utf8");
 }
@@ -1319,8 +1325,15 @@ async function upsertPaperclipDistillationCursor(ctx: PluginContext, input: {
   observedAt?: string | null;
   metadata?: Record<string, unknown>;
 }): Promise<string> {
-  const cursorId = randomUUID();
   const scope = paperclipCursorScopeMetadata(input);
+  const cursorId = deterministicUuid([
+    "paperclip_distillation_cursor",
+    input.companyId,
+    input.wikiId,
+    scope.sourceScope,
+    scope.scopeKey,
+    "paperclip_issue_history",
+  ].join(":"));
   await ctx.db.execute(
     `INSERT INTO ${distillationCursorTable(ctx)} AS paperclip_distillation_cursors
        (id, company_id, wiki_id, source_scope, scope_key, project_id, root_issue_id, source_kind, last_observed_at, pending_event_count, metadata)

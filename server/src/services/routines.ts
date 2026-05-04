@@ -605,6 +605,17 @@ export function routineService(
     if (agent.status === "terminated") throw conflict("Cannot assign routines to terminated agents");
   }
 
+  async function assertRestorableAssignee(
+    companyId: string,
+    assigneeAgentId: string | null | undefined,
+    actor: Actor,
+  ) {
+    await assertAssignableAgent(companyId, assigneeAgentId);
+    if (actor.agentId && assigneeAgentId !== actor.agentId) {
+      throw forbidden("Agents can only restore routine revisions assigned to themselves");
+    }
+  }
+
   async function assertProject(companyId: string, projectId: string | null | undefined) {
     if (!projectId) return;
     const project = await db
@@ -1830,6 +1841,9 @@ export function routineService(
       }
 
       const snapshot = targetRevision.snapshot as RoutineRevisionSnapshotV1;
+      const routineSnapshot = snapshot.routine;
+      await assertRestorableAssignee(existingRoutine.companyId, routineSnapshot.assigneeAgentId, actor);
+
       const currentTriggers = await db
         .select({ id: routineTriggers.id })
         .from(routineTriggers)
@@ -1862,7 +1876,6 @@ export function routineService(
           .then((rows) => rows[0] ?? null);
         if (!locked) throw notFound("Routine not found");
 
-        const routineSnapshot = snapshot.routine;
         const now = new Date();
         const [restoredRoutine] = await txDb
           .update(routines)

@@ -361,6 +361,57 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     await expect(db.select().from(routineRuns).where(eq(routineRuns.id, run.id))).resolves.toHaveLength(1);
   });
 
+  it("blocks agents from restoring routine revisions assigned to another agent", async () => {
+    const { companyId, routine, svc } = await seedFixture();
+    const otherAgentId = randomUUID();
+    await db.insert(agents).values({
+      id: otherAgentId,
+      companyId,
+      name: "OtherCoder",
+      role: "engineer",
+      status: "active",
+      adapterType: "codex_local",
+      adapterConfig: {},
+      runtimeConfig: {},
+      permissions: {},
+    });
+    const revision1Id = routine.latestRevisionId!;
+
+    await svc.update(routine.id, { assigneeAgentId: otherAgentId }, {});
+
+    await expect(
+      svc.restoreRevision(routine.id, revision1Id, { agentId: otherAgentId }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: "Agents can only restore routine revisions assigned to themselves",
+    });
+    await expect(svc.get(routine.id)).resolves.toMatchObject({
+      assigneeAgentId: otherAgentId,
+      latestRevisionNumber: 2,
+    });
+  });
+
+  it("blocks restoring routine revisions assigned to agents that are no longer assignable", async () => {
+    const { agentId, routine, svc } = await seedFixture();
+    const revision1Id = routine.latestRevisionId!;
+    await svc.update(routine.id, { description: "revision 2" }, {});
+    await db
+      .update(agents)
+      .set({ status: "terminated" })
+      .where(eq(agents.id, agentId));
+
+    await expect(
+      svc.restoreRevision(routine.id, revision1Id, { userId: "board-user" }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Cannot assign routines to terminated agents",
+    });
+    await expect(svc.get(routine.id)).resolves.toMatchObject({
+      description: "revision 2",
+      latestRevisionNumber: 2,
+    });
+  });
+
   it("appends safe trigger metadata revisions without leaking webhook secrets", async () => {
     const { routine, svc } = await seedFixture();
     const created = await svc.createTrigger(routine.id, {

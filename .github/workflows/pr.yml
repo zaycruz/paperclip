@@ -76,8 +76,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm -r typecheck
+      - name: Typecheck workspaces whose build scripts skip TypeScript
+        run: pnpm run typecheck:build-gaps
 
       - name: Run general test suites
         run: pnpm test:run:general
@@ -183,9 +183,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium

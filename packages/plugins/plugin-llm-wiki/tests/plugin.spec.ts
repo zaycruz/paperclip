@@ -2210,6 +2210,34 @@ Route sidebar state stays attached to the selected wiki page.
     expect(harness.dbExecutes.some((execute) => execute.sql.includes("wiki_page_revisions"))).toBe(true);
   });
 
+  it("guards wiki log appends against stale concurrent writes", async () => {
+    const harness = createTestHarness({ manifest });
+    const reads: string[] = [
+      "# Log\n\n- Existing entry\n",
+      "# Log\n\n- Existing entry\n- Concurrent entry\n",
+    ];
+    const writes: string[] = [];
+    harness.ctx.localFolders.readText = async (_companyId, _folderKey, relativePath) => {
+      if (relativePath !== "wiki/log.md") throw new Error("missing");
+      const value = reads.shift();
+      if (value == null) throw new Error("missing");
+      return value;
+    };
+    harness.ctx.localFolders.writeTextAtomic = async (_companyId, _folderKey, relativePath, contents) => {
+      writes.push(`${relativePath}:${contents}`);
+      return harness.ctx.localFolders.status(COMPANY_ID, "wiki-root");
+    };
+
+    await plugin.definition.setup(harness.ctx);
+    await expect(harness.executeTool("wiki_append_log", {
+      companyId: COMPANY_ID,
+      wikiId: "default",
+      entry: "New entry",
+    })).rejects.toThrow("Refusing to overwrite wiki/log.md");
+
+    expect(writes).toHaveLength(0);
+  });
+
   it("blocks agent-tool writes to AGENTS.md but allows explicit board edits", async () => {
     const harness = createTestHarness({ manifest });
     const files = new Map<string, string>([

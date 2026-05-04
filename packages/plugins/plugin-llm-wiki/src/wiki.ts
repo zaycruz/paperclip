@@ -2863,23 +2863,20 @@ export async function registerWikiTools(ctx: PluginContext) {
   }, async (params: unknown): Promise<ToolResult> => {
     const input = params as ToolParams;
     const companyId = requireString(input.companyId, "companyId");
+    const wikiId = normalizeWikiId(input.wikiId);
     const entry = requireString(input.entry, "entry");
-    let current = "";
-    try {
-      current = await ctx.localFolders.readText(companyId, WIKI_ROOT_FOLDER_KEY, "wiki/log.md");
-    } catch {
-      current = "# Log\n\nAppend-only chronological record of wiki operations.\n";
-    }
-    const next = `${current.trimEnd()}\n\n- ${new Date().toISOString()} ${entry}\n`;
-    await ctx.localFolders.writeTextAtomic(companyId, WIKI_ROOT_FOLDER_KEY, "wiki/log.md", next);
-    await upsertPageMetadata(ctx, {
+    const current = await readCurrentWithHash(ctx, companyId, "wiki/log.md");
+    const base = current.contents ?? "# Log\n\nAppend-only chronological record of wiki operations.\n";
+    const next = `${base.trimEnd()}\n\n- ${new Date().toISOString()} ${entry}\n`;
+    const result = await writeWikiPage(ctx, {
       companyId,
-      wikiId: normalizeWikiId(input.wikiId),
+      wikiId,
       path: "wiki/log.md",
       contents: next,
+      expectedHash: current.hash,
       summary: "Append log entry",
     });
-    return { content: "Appended log entry", data: { companyId, wikiId: normalizeWikiId(input.wikiId), hash: contentHash(next) } };
+    return { content: "Appended log entry", data: result };
   });
 
   ctx.tools.register("wiki_update_index", {

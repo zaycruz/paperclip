@@ -507,7 +507,7 @@ export function pluginRoutes(
       throw notFound("Issue not found");
     }
     if (policy === "required-for-agent-in-progress") {
-      if (issue.status !== "in_progress") return;
+      if (issue.status !== "in_progress" || issue.assigneeAgentId !== req.actor.agentId) return;
     }
     const runId = req.actor.runId?.trim();
     if (!runId) {

@@ -253,7 +253,7 @@ describe.sequential("plugin scoped API routes", () => {
     }));
   });
 
-  it("rejects non-owning agents on in-progress required checkout routes before worker dispatch", async () => {
+  it("allows non-assignee agents on in-progress required checkout routes without claiming checkout ownership", async () => {
     const apiRoutes = manifest([
       {
         routeKey: "issue.advance",
@@ -271,9 +271,6 @@ describe.sequential("plugin scoped API routes", () => {
       status: "in_progress",
       assigneeAgentId: agentId,
     });
-    const conflict = new Error("Issue run ownership conflict") as Error & { status?: number };
-    conflict.status = 409;
-    mockIssueService.assertCheckoutOwner.mockRejectedValue(conflict);
     const { app, workerManager } = await createApp({
       actor: {
         type: "agent",
@@ -294,9 +291,15 @@ describe.sequential("plugin scoped API routes", () => {
       .post(`/api/plugins/${pluginId}/api/issues/${issueId}/advance`)
       .send({ step: "next" });
 
-    expect(res.status).toBe(409);
-    expect(mockIssueService.assertCheckoutOwner).toHaveBeenCalledWith(issueId, peerAgentId, runId);
-    expect(workerManager.call).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mockIssueService.assertCheckoutOwner).not.toHaveBeenCalled();
+    expect(workerManager.call).toHaveBeenCalledWith(pluginId, "handleApiRequest", expect.objectContaining({
+      routeKey: "issue.advance",
+      params: { issueId },
+      body: { step: "next" },
+      actor: expect.objectContaining({ actorType: "agent", agentId: peerAgentId, runId }),
+      companyId,
+    }));
   });
 
   it("rejects checkout-protected agent routes without a run id before worker dispatch", async () => {

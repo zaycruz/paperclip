@@ -35,6 +35,7 @@ vi.mock("../adapters/index.js", () => ({
     execute: adapterExecute,
     supportsLocalAgentJwt: false,
   }),
+  listAdapterModelProfiles: async () => [],
   runningProcesses: new Map(),
 }));
 
@@ -67,6 +68,7 @@ describeEmbeddedPostgres("heartbeat plugin environments", () => {
   });
 
   afterAll(async () => {
+    await db.$client.end();
     await stopDb?.();
   });
 

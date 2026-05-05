@@ -15,6 +15,7 @@ import type {
   IssueThreadInteractionContinuationPolicy,
   IssueThreadInteractionKind,
   IssueThreadInteractionStatus,
+  IssueCommentAuthorType,
   IssueStatus,
 } from "../constants.js";
 import type { Goal } from "./goal.js";
@@ -160,6 +161,16 @@ export interface IssueProductivityReview {
   noCommentStreak: number | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface SuccessfulRunHandoffState {
+  state: "required" | "resolved" | "escalated";
+  required: boolean;
+  sourceRunId: string | null;
+  correctiveRunId: string | null;
+  assigneeAgentId: string | null;
+  detectedProgressSummary: string | null;
+  createdAt: Date;
 }
 
 export interface IssueRelation {
@@ -324,6 +335,7 @@ export interface Issue {
   blocks?: IssueRelationIssueSummary[];
   blockerAttention?: IssueBlockerAttention;
   productivityReview?: IssueProductivityReview | null;
+  successfulRunHandoff?: SuccessfulRunHandoffState | null;
   relatedWork?: IssueRelatedWorkSummary;
   referencedIssueIdentifiers?: string[];
   planDocument?: IssueDocument | null;
@@ -346,12 +358,37 @@ export interface IssueComment {
   id: string;
   companyId: string;
   issueId: string;
+  authorType?: IssueCommentAuthorType | null;
   authorAgentId: string | null;
   authorUserId: string | null;
   body: string;
+  presentation?: IssueCommentPresentation | null;
+  metadata?: IssueCommentMetadata | null;
   followUpRequested?: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IssueCommentPresentation {
+  kind: "system_notice";
+  tone: "info" | "success" | "warning" | "danger";
+  detailsDefaultOpen: boolean;
+}
+
+export interface IssueCommentMetadataKeyValueRow {
+  type: "key_value";
+  label: string;
+  value: string;
+}
+
+export interface IssueCommentMetadataSection {
+  title?: string;
+  rows: IssueCommentMetadataKeyValueRow[];
+}
+
+export interface IssueCommentMetadata {
+  version: 1;
+  sections: IssueCommentMetadataSection[];
 }
 
 export interface IssueThreadInteractionActorFields {

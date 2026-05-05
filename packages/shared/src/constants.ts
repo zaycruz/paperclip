@@ -146,6 +146,9 @@ export const INBOX_MINE_ISSUE_STATUS_FILTER = INBOX_MINE_ISSUE_STATUSES.join(","
 
 export const ISSUE_PRIORITIES = ["critical", "high", "medium", "low"] as const;
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
+
+export const ISSUE_COMMENT_AUTHOR_TYPES = ["user", "agent", "system"] as const;
+export type IssueCommentAuthorType = (typeof ISSUE_COMMENT_AUTHOR_TYPES)[number];
 export const MAX_ISSUE_REQUEST_DEPTH = 1024;
 
 export function clampIssueRequestDepth(value: number | null | undefined): number {

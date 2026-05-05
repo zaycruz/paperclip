@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
-import { activityLog, agents, companies, costEvents, issues, projects } from "@paperclipai/db";
+import { activityLog, agents, companies, costEvents, heartbeatRuns, issues, projects } from "@paperclipai/db";
 import { notFound, unprocessable } from "../errors.js";
 import { budgetService, type BudgetServiceHooks } from "./budgets.js";
 
@@ -135,12 +135,15 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
       };
     },
 
-    issueTreeSummary: async (companyId: string, issueId: string) => {
+    issueTreeSummary: async (
+      companyId: string,
+      issueId: string,
+      options?: { excludeRoot?: boolean },
+    ) => {
       // Callers must resolve and authorize a visible root issue before invoking this.
       // The route does that so zero counts are not mistaken for a missing root.
       const childIssues = alias(issues, "child");
-      const issueTreeCondition = sql<boolean>`
-        ${issues.id} IN (
+      const issueTreeIds = sql`
           WITH RECURSIVE issue_tree(id) AS (
             SELECT ${issues.id}
             FROM ${issues}
@@ -155,6 +158,28 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
               AND ${childIssues.hiddenAt} IS NULL
           )
           SELECT id FROM issue_tree
+          ${options?.excludeRoot ? sql`WHERE id <> ${issueId}` : sql``}
+      `;
+      const issueTreeTextIds = sql`
+          WITH RECURSIVE issue_tree(id) AS (
+            SELECT ${issues.id}
+            FROM ${issues}
+            WHERE ${issues.companyId} = ${companyId}
+              AND ${issues.id} = ${issueId}
+              AND ${issues.hiddenAt} IS NULL
+            UNION ALL
+            SELECT ${childIssues.id}
+            FROM ${issues} ${childIssues}
+            JOIN issue_tree ON ${childIssues.parentId} = issue_tree.id
+            WHERE ${childIssues.companyId} = ${companyId}
+              AND ${childIssues.hiddenAt} IS NULL
+          )
+          SELECT id::text FROM issue_tree
+          ${options?.excludeRoot ? sql`WHERE id <> ${issueId}` : sql``}
+      `;
+      const issueTreeCondition = sql<boolean>`
+        ${issues.id} IN (
+          ${issueTreeIds}
         )
       `;
 
@@ -182,6 +207,37 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           ),
         );
 
+      const [runRow] = await db
+        .select({
+          runCount: sql<number>`count(distinct ${heartbeatRuns.id})::int`,
+          runtimeMs: sql<number>`
+            coalesce(sum(
+              greatest(
+                extract(epoch from (coalesce(${heartbeatRuns.finishedAt}, now()) - ${heartbeatRuns.startedAt})) * 1000,
+                0
+              )
+            ), 0)::double precision
+          `,
+        })
+        .from(heartbeatRuns)
+        .where(
+          and(
+            eq(heartbeatRuns.companyId, companyId),
+            isNotNull(heartbeatRuns.startedAt),
+            sql<boolean>`(
+              ${heartbeatRuns.contextSnapshot} ->> 'issueId' IN (${issueTreeTextIds})
+              OR EXISTS (
+                SELECT 1
+                FROM ${activityLog}
+                WHERE ${activityLog.companyId} = ${companyId}
+                  AND ${activityLog.runId} = ${heartbeatRuns.id}
+                  AND ${activityLog.entityType} = 'issue'
+                  AND ${activityLog.entityId} IN (${issueTreeTextIds})
+              )
+            )`,
+          ),
+        );
+
       return {
         issueId,
         issueCount: Number(row?.issueCount ?? 0),
@@ -190,6 +246,8 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         inputTokens: Number(row?.inputTokens ?? 0),
         cachedInputTokens: Number(row?.cachedInputTokens ?? 0),
         outputTokens: Number(row?.outputTokens ?? 0),
+        runCount: Number(runRow?.runCount ?? 0),
+        runtimeMs: Number(runRow?.runtimeMs ?? 0),
       };
     },
 

@@ -36,6 +36,8 @@ export interface IssueCostSummary {
   inputTokens: number;
   cachedInputTokens: number;
   outputTokens: number;
+  runCount: number;
+  runtimeMs: number;
 }
 
 export interface CostByAgent {

@@ -211,6 +211,15 @@ function resolveRunningIssueRun(
     : (liveRuns ?? []).find((run) => run.status === "running") ?? null;
 }
 
+function dedupeLiveRunsById(liveRuns: readonly LiveRunForIssue[]) {
+  const seen = new Set<string>();
+  return liveRuns.filter((run) => {
+    if (seen.has(run.id)) return false;
+    seen.add(run.id);
+    return true;
+  });
+}
+
 function readIssueRunStateFromCache(queryClient: QueryClient, issueId: string) {
   const liveRuns = queryClient.getQueryData<LiveRunForIssue[]>(
     queryKeys.issues.liveRuns(issueId),
@@ -2183,7 +2192,7 @@ export function IssueDetail() {
         previousRunState.find((state) => state.activeRun?.id === runId)?.activeRun ??
         previousRunState.find((state) => state.activeRun)?.activeRun ??
         null;
-      const liveRunList = previousRunState.flatMap((state) => state.liveRuns ?? []);
+      const liveRunList = dedupeLiveRunsById(previousRunState.flatMap((state) => state.liveRuns ?? []));
       const runningIssueRun = resolveRunningIssueRun(cachedActiveRun, liveRunList);
       const targetRun =
         cachedActiveRun?.id === runId

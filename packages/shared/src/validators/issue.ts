@@ -8,6 +8,7 @@ import {
   ISSUE_EXECUTION_POLICY_MODES,
   ISSUE_EXECUTION_STAGE_TYPES,
   ISSUE_EXECUTION_STATE_STATUSES,
+  ISSUE_COMMENT_AUTHOR_TYPES,
   ISSUE_MONITOR_SCHEDULED_BY,
   ISSUE_PRIORITIES,
   clampIssueRequestDepth,
@@ -233,11 +234,49 @@ export const checkoutIssueSchema = z.object({
 
 export type CheckoutIssue = z.infer<typeof checkoutIssueSchema>;
 
+export const issueCommentAuthorTypeSchema = z.enum(ISSUE_COMMENT_AUTHOR_TYPES);
+
+const issueCommentMetadataKeyValueRowSchema = z
+  .object({
+    type: z.literal("key_value"),
+    label: z.string().trim().min(1).max(120),
+    value: z.string().trim().max(1000),
+  })
+  .strict();
+
+export const issueCommentPresentationSchema = z
+  .object({
+    kind: z.literal("system_notice"),
+    tone: z.enum(["info", "success", "warning", "danger"]).optional().default("info"),
+    detailsDefaultOpen: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export const issueCommentMetadataSchema = z
+  .object({
+    version: z.literal(1),
+    sections: z
+      .array(
+        z
+          .object({
+            title: z.string().trim().min(1).max(120).optional(),
+            rows: z.array(issueCommentMetadataKeyValueRowSchema).min(1).max(20),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(10),
+  })
+  .strict();
+
 export const addIssueCommentSchema = z.object({
   body: multilineTextSchema.pipe(z.string().min(1)),
   reopen: z.boolean().optional(),
   resume: z.boolean().optional(),
   interrupt: z.boolean().optional(),
+  authorType: issueCommentAuthorTypeSchema.optional(),
+  presentation: issueCommentPresentationSchema.optional().nullable(),
+  metadata: issueCommentMetadataSchema.optional().nullable(),
 });
 
 export type AddIssueComment = z.infer<typeof addIssueCommentSchema>;

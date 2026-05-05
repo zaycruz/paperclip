@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, not, or, sql }
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  companySecretVersions,
   companySecrets,
   executionWorkspaces,
   goals,
@@ -50,6 +51,7 @@ import { logger } from "../middleware/logger.js";
 import { getTelemetryClient } from "../telemetry.js";
 import { issueService } from "./issues.js";
 import { secretService } from "./secrets.js";
+import { getSecretProvider } from "../secrets/provider-registry.js";
 import { parseCron, validateCron } from "./cron.js";
 import { heartbeatService } from "./heartbeat.js";
 import { queueIssueAssignmentWakeup, type IssueAssignmentWakeupDeps } from "./issue-assignment-wakeup.js";
@@ -60,6 +62,7 @@ const OPEN_ISSUE_STATUSES = ["backlog", "todo", "in_progress", "in_review", "blo
 const LIVE_HEARTBEAT_RUN_STATUSES = ["queued", "running", "scheduled_retry"];
 const TERMINAL_ISSUE_STATUSES = new Set(["done", "cancelled"]);
 const MAX_CATCH_UP_RUNS = 25;
+const MAX_ROUTINE_REVISIONS = 100;
 const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0,
   Mon: 1,
@@ -944,18 +947,52 @@ export function routineService(
     companyId: string,
     routineId: string,
     actor: Actor,
+    executor?: Db,
   ) {
     const secretValue = crypto.randomBytes(24).toString("hex");
-    const secret = await secretsSvc.create(
-      companyId,
-      {
-        name: `routine-${routineId}-${crypto.randomBytes(6).toString("hex")}`,
-        provider: "local_encrypted",
-        value: secretValue,
-        description: `Webhook auth for routine ${routineId}`,
-      },
-      actor,
-    );
+    const input = {
+      name: `routine-${routineId}-${crypto.randomBytes(6).toString("hex")}`,
+      provider: "local_encrypted" as const,
+      value: secretValue,
+      description: `Webhook auth for routine ${routineId}`,
+    };
+    const provider = getSecretProvider(input.provider);
+    const prepared = await provider.createVersion({
+      value: input.value,
+      externalRef: null,
+    });
+
+    const insertSecret = async (secretDb: Db) => {
+      const secret = await secretDb
+        .insert(companySecrets)
+        .values({
+          companyId,
+          name: input.name,
+          provider: input.provider,
+          externalRef: prepared.externalRef,
+          latestVersion: 1,
+          description: input.description,
+          createdByAgentId: actor.agentId ?? null,
+          createdByUserId: actor.userId ?? null,
+        })
+        .returning()
+        .then((rows) => rows[0]);
+
+      await secretDb.insert(companySecretVersions).values({
+        secretId: secret.id,
+        version: 1,
+        material: prepared.material,
+        valueSha256: prepared.valueSha256,
+        createdByAgentId: actor.agentId ?? null,
+        createdByUserId: actor.userId ?? null,
+      });
+
+      return secret;
+    };
+
+    const secret = executor
+      ? await insertSecret(executor)
+      : await db.transaction(async (tx) => insertSecret(tx as unknown as Db));
     return { secret, secretValue };
   }
 
@@ -1805,7 +1842,8 @@ export function routineService(
         .select()
         .from(routineRevisions)
         .where(and(eq(routineRevisions.companyId, routine.companyId), eq(routineRevisions.routineId, routine.id)))
-        .orderBy(desc(routineRevisions.revisionNumber), desc(routineRevisions.createdAt));
+        .orderBy(desc(routineRevisions.revisionNumber), desc(routineRevisions.createdAt))
+        .limit(MAX_ROUTINE_REVISIONS);
       return rows.map(mapRoutineRevision);
     },
 
@@ -1834,37 +1872,10 @@ export function routineService(
         )
         .then((rows) => rows[0] ?? null);
       if (!targetRevision) throw notFound("Routine revision not found");
-      if (existingRoutine.latestRevisionId === targetRevision.id) {
-        throw conflict("Selected revision is already the latest revision", {
-          currentRevisionId: existingRoutine.latestRevisionId,
-        });
-      }
 
       const snapshot = targetRevision.snapshot as RoutineRevisionSnapshotV1;
       const routineSnapshot = snapshot.routine;
       await assertRestorableAssignee(existingRoutine.companyId, routineSnapshot.assigneeAgentId, actor);
-
-      const currentTriggers = await db
-        .select({ id: routineTriggers.id })
-        .from(routineTriggers)
-        .where(and(eq(routineTriggers.companyId, existingRoutine.companyId), eq(routineTriggers.routineId, existingRoutine.id)));
-      const currentTriggerIds = new Set(currentTriggers.map((trigger) => trigger.id));
-      const missingWebhookTriggers = snapshot.triggers
-        .filter((trigger) => trigger.kind === "webhook" && !currentTriggerIds.has(trigger.id));
-      const recreatedWebhookSecrets = new Map<string, { publicId: string; secretId: string; secretMaterial: RoutineTriggerSecretRestoreMaterial }>();
-      for (const trigger of missingWebhookTriggers) {
-        const publicId = crypto.randomBytes(12).toString("hex");
-        const created = await createWebhookSecret(existingRoutine.companyId, existingRoutine.id, actor);
-        recreatedWebhookSecrets.set(trigger.id, {
-          publicId,
-          secretId: created.secret.id,
-          secretMaterial: {
-            triggerId: trigger.id,
-            webhookUrl: `${process.env.PAPERCLIP_API_URL}/api/routine-triggers/public/${publicId}/fire`,
-            webhookSecret: created.secretValue,
-          },
-        });
-      }
 
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
@@ -1875,6 +1886,33 @@ export function routineService(
           .where(eq(routines.id, existingRoutine.id))
           .then((rows) => rows[0] ?? null);
         if (!locked) throw notFound("Routine not found");
+        if (locked.latestRevisionId === targetRevision.id) {
+          throw conflict("Selected revision is already the latest revision", {
+            currentRevisionId: locked.latestRevisionId,
+          });
+        }
+
+        const currentTriggers = await txDb
+          .select({ id: routineTriggers.id })
+          .from(routineTriggers)
+          .where(and(eq(routineTriggers.companyId, locked.companyId), eq(routineTriggers.routineId, locked.id)));
+        const currentTriggerIds = new Set(currentTriggers.map((trigger) => trigger.id));
+        const missingWebhookTriggers = snapshot.triggers
+          .filter((trigger) => trigger.kind === "webhook" && !currentTriggerIds.has(trigger.id));
+        const recreatedWebhookSecrets = new Map<string, { publicId: string; secretId: string; secretMaterial: RoutineTriggerSecretRestoreMaterial }>();
+        for (const trigger of missingWebhookTriggers) {
+          const publicId = crypto.randomBytes(12).toString("hex");
+          const created = await createWebhookSecret(locked.companyId, locked.id, actor, txDb);
+          recreatedWebhookSecrets.set(trigger.id, {
+            publicId,
+            secretId: created.secret.id,
+            secretMaterial: {
+              triggerId: trigger.id,
+              webhookUrl: `${process.env.PAPERCLIP_API_URL}/api/routine-triggers/public/${publicId}/fire`,
+              webhookSecret: created.secretValue,
+            },
+          });
+        }
 
         const now = new Date();
         const [restoredRoutine] = await txDb

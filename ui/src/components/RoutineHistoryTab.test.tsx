@@ -232,6 +232,7 @@ describe("RoutineHistoryTab", () => {
     const old = createRevision({
       id: "revision-1",
       revisionNumber: 1,
+      snapshot: snapshotV1({ status: "paused" }),
       changeSummary: "Created routine",
     });
     mockRoutinesApi.listRevisions.mockResolvedValue([current, old]);
@@ -248,6 +249,8 @@ describe("RoutineHistoryTab", () => {
     expect(container.textContent).toContain(
       "Restoring this revision creates a new revision 3 with the same content. History stays append-only.",
     );
+    expect(container.textContent).toContain("Status");
+    expect(container.textContent).toContain("paused");
     expect(container.textContent).toContain("Restore as new revision");
   });
 

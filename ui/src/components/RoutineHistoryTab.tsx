@@ -512,6 +512,12 @@ function RevisionPreview({
       differs: !!currentSnapshot && currentSnapshot.priority !== snapshot.priority,
     },
     {
+      key: "status",
+      label: "Status",
+      value: snapshot.status,
+      differs: !!currentSnapshot && currentSnapshot.status !== snapshot.status,
+    },
+    {
       key: "assigneeAgentId",
       label: "Default agent",
       value: resolveAgentName(snapshot.assigneeAgentId, agents),

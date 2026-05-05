@@ -361,6 +361,43 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     await expect(db.select().from(routineRuns).where(eq(routineRuns.id, run.id))).resolves.toHaveLength(1);
   });
 
+  it("rejects restoring the current latest routine revision", async () => {
+    const { routine, svc } = await seedFixture();
+
+    await expect(
+      svc.restoreRevision(routine.id, routine.latestRevisionId!, {}),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: {
+        currentRevisionId: routine.latestRevisionId,
+      },
+    });
+  });
+
+  it("recreates deleted webhook trigger secrets when restoring a historical revision", async () => {
+    const { routine, svc } = await seedFixture();
+    const created = await svc.createTrigger(routine.id, {
+      kind: "webhook",
+      signingMode: "bearer",
+      replayWindowSec: 300,
+    }, {});
+    await svc.deleteTrigger(created.trigger.id, {});
+
+    const restored = await svc.restoreRevision(routine.id, created.revision.id, {});
+
+    expect(restored.secretMaterials).toHaveLength(1);
+    expect(restored.secretMaterials[0]).toMatchObject({
+      triggerId: created.trigger.id,
+    });
+    expect(restored.secretMaterials[0]?.webhookSecret).toBeTruthy();
+    expect(restored.secretMaterials[0]?.webhookUrl).toContain("/api/routine-triggers/public/");
+
+    const restoredTrigger = await svc.getTrigger(created.trigger.id);
+    expect(restoredTrigger?.secretId).toBeTruthy();
+    expect(restoredTrigger?.publicId).toBeTruthy();
+    expect(restoredTrigger?.publicId).not.toBe(created.trigger.publicId);
+  });
+
   it("blocks agents from restoring routine revisions assigned to another agent", async () => {
     const { companyId, routine, svc } = await seedFixture();
     const otherAgentId = randomUUID();

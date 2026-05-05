@@ -250,6 +250,7 @@ describe("adapter routes", () => {
         expect.objectContaining({
           key: "fastMode",
           default: false,
+          meta: { visibleWhen: { key: "agent", values: ["codex"] } },
         }),
         expect.objectContaining({
           key: "warmHandleIdleMs",

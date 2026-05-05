@@ -54,6 +54,7 @@ export function getConfigSchema(): AdapterConfigSchema {
         type: "toggle",
         default: false,
         hint: "Only applies when ACP agent is Codex. Requests Codex Fast mode through ACP session config.",
+        meta: { visibleWhen: { key: "agent", values: ["codex"] } },
       },
       {
         key: "timeoutSec",

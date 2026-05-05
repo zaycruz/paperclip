@@ -193,7 +193,7 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
         )
       `;
 
-      const issueTreeIdsTextCte = sql`
+      const runSummarySql = sql`
         WITH RECURSIVE issue_tree(id) AS (
           ${cteSeedText}
           UNION ALL
@@ -203,7 +203,23 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
           WHERE ${childIssues.companyId} = ${companyId}
             AND ${childIssues.hiddenAt} IS NULL
         )
-        SELECT id FROM issue_tree
+        SELECT
+          count(distinct ${heartbeatRuns.id})::int AS "runCount",
+          coalesce(sum(extract(epoch from (coalesce(${heartbeatRuns.finishedAt}, now()) - ${heartbeatRuns.startedAt})) * 1000), 0)::double precision AS "runtimeMs"
+        FROM ${heartbeatRuns}
+        WHERE ${heartbeatRuns.companyId} = ${companyId}
+          AND ${heartbeatRuns.startedAt} IS NOT NULL
+          AND (
+            ${heartbeatRuns.contextSnapshot} ->> 'issueId' IN (SELECT id FROM issue_tree)
+            OR EXISTS (
+              SELECT 1
+              FROM ${activityLog}
+              JOIN issue_tree ON ${activityLog.entityId} = issue_tree.id
+              WHERE ${activityLog.companyId} = ${companyId}
+                AND ${activityLog.entityType} = 'issue'
+                AND ${activityLog.runId} = ${heartbeatRuns.id}
+            )
+          )
       `;
 
       // Run cost-event aggregation and run-duration aggregation in parallel.
@@ -233,33 +249,13 @@ export function costService(db: Db, budgetHooks: BudgetServiceHooks = {}) {
               issueTreeCondition,
             ),
           ),
-        db
-          .select({
-            runCount: sql<number>`count(distinct ${heartbeatRuns.id})::int`,
-            runtimeMs: sql<number>`coalesce(sum(extract(epoch from (coalesce(${heartbeatRuns.finishedAt}, now()) - ${heartbeatRuns.startedAt})) * 1000), 0)::double precision`,
-          })
-          .from(heartbeatRuns)
-          .where(
-            and(
-              eq(heartbeatRuns.companyId, companyId),
-              isNotNull(heartbeatRuns.startedAt),
-              sql`(
-                ${heartbeatRuns.contextSnapshot} ->> 'issueId' IN (${issueTreeIdsTextCte})
-                OR EXISTS (
-                  SELECT 1
-                  FROM ${activityLog}
-                  WHERE ${activityLog.companyId} = ${companyId}
-                    AND ${activityLog.entityType} = 'issue'
-                    AND ${activityLog.runId} = ${heartbeatRuns.id}
-                    AND ${activityLog.entityId} IN (${issueTreeIdsTextCte})
-                )
-              )`,
-            ),
-          ),
+        db.execute(runSummarySql),
       ]);
 
       const costRow = costRowResult[0];
-      const runRow = runRowResult[0];
+      const runRow = Array.isArray(runRowResult)
+        ? (runRowResult[0] as { runCount?: number | string | null; runtimeMs?: number | string | null } | undefined)
+        : undefined;
 
       return {
         issueId,

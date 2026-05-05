@@ -162,6 +162,18 @@ export interface IssueProductivityReview {
   updatedAt: Date;
 }
 
+export type SuccessfulRunHandoffStateKind = "required" | "resolved" | "escalated";
+
+export interface SuccessfulRunHandoffState {
+  state: SuccessfulRunHandoffStateKind;
+  required: boolean;
+  sourceRunId: string | null;
+  correctiveRunId: string | null;
+  assigneeAgentId: string | null;
+  detectedProgressSummary: string | null;
+  createdAt: Date | string | null;
+}
+
 export interface IssueRelation {
   id: string;
   companyId: string;
@@ -324,6 +336,7 @@ export interface Issue {
   blocks?: IssueRelationIssueSummary[];
   blockerAttention?: IssueBlockerAttention;
   productivityReview?: IssueProductivityReview | null;
+  successfulRunHandoff?: SuccessfulRunHandoffState | null;
   relatedWork?: IssueRelatedWorkSummary;
   referencedIssueIdentifiers?: string[];
   planDocument?: IssueDocument | null;

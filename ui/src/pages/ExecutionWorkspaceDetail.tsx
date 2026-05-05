@@ -74,6 +74,16 @@ function executionWorkspaceTabPath(workspaceId: string, tab: ExecutionWorkspaceT
   return `/execution-workspaces/${workspaceId}/${segment}`;
 }
 
+function LegacyWorkspaceTabRedirect({ workspaceId }: { workspaceId: string }) {
+  useEffect(() => {
+    try {
+      localStorage.removeItem(`paperclip:execution-workspace-tab:${workspaceId}`);
+    } catch {}
+  }, [workspaceId]);
+
+  return <Navigate to={executionWorkspaceTabPath(workspaceId, "issues")} replace />;
+}
+
 function isSafeExternalUrl(value: string | null | undefined) {
   if (!value) return false;
   try {
@@ -675,13 +685,10 @@ export function ExecutionWorkspaceDetail() {
   const pendingRuntimeAction = controlRuntimeServices.isPending ? controlRuntimeServices.variables ?? null : null;
 
   if (workspaceId && activeTab === null) {
-    return <Navigate to={executionWorkspaceTabPath(workspaceId, "issues")} replace />;
+    return <LegacyWorkspaceTabRedirect workspaceId={workspaceId} />;
   }
 
   const handleTabChange = (tab: ExecutionWorkspaceTab) => {
-    try {
-      localStorage.setItem(`paperclip:execution-workspace-tab:${workspace.id}`, tab);
-    } catch {}
     navigate(executionWorkspaceTabPath(workspace.id, tab));
   };
 

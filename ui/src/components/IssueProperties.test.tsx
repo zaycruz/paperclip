@@ -478,7 +478,6 @@ describe("IssueProperties", () => {
 
   it("removes a blocked-by issue from the chip remove action after confirmation", async () => {
     const onUpdate = vi.fn();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     const root = renderProperties(container, {
       issue: createIssue({
         blockedBy: [
@@ -514,11 +513,19 @@ describe("IssueProperties", () => {
     await act(async () => {
       removeButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    await flush();
 
-    expect(confirmSpy).toHaveBeenCalledWith("Remove PAP-2: Existing blocker as a blocker?");
+    expect(document.body.textContent).toContain("Remove PAP-2: Existing blocker as a blocker for this issue.");
+    const confirmButton = Array.from(document.body.querySelectorAll("button"))
+      .find((button) => button.textContent?.includes("Remove blocker"));
+    expect(confirmButton).not.toBeUndefined();
+
+    await act(async () => {
+      confirmButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     expect(onUpdate).toHaveBeenCalledWith({ blockedByIssueIds: ["issue-4"] });
 
-    confirmSpy.mockRestore();
     act(() => root.unmount());
   });
 

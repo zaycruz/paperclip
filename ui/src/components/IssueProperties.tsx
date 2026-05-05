@@ -31,6 +31,16 @@ import { Identity } from "./Identity";
 import { IssueReferencePill } from "./IssueReferencePill";
 import { formatDate, cn, projectUrl } from "../lib/utils";
 import { timeAgo } from "../lib/timeAgo";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { User, Hexagon, ArrowUpRight, Tag, Plus, GitBranch, FolderOpen, Check, ExternalLink, X, Clock } from "lucide-react";
@@ -148,6 +158,7 @@ function RemovableIssueReferencePill({
   issue: NonNullable<Issue["blockedBy"]>[number];
   onRemove: (issueId: string) => void;
 }) {
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const issueLabel = issue.identifier ?? issue.title;
   const confirmLabel = issue.identifier ? `${issue.identifier}: ${issue.title}` : issue.title;
   const content = (
@@ -160,41 +171,64 @@ function RemovableIssueReferencePill({
   const handleRemove = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!window.confirm(`Remove ${confirmLabel} as a blocker?`)) return;
+    setIsConfirmOpen(true);
+  };
+  const confirmRemove = () => {
     onRemove(issue.id);
+    setIsConfirmOpen(false);
   };
 
   return (
-    <span
-      data-mention-kind="issue"
-      className={cn(
-        "paperclip-mention-chip paperclip-mention-chip--issue group",
-        "inline-flex items-center gap-1 rounded-full border border-border py-0.5 pl-1 pr-2 text-xs",
-      )}
-      title={issue.title}
-      aria-label={`Issue ${issueLabel}: ${issue.title}`}
-    >
-      <button
-        type="button"
-        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-colors transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring group-hover:opacity-100"
-        aria-label={removeLabel}
-        title={removeLabel}
-        onClick={handleRemove}
+    <>
+      <span
+        data-mention-kind="issue"
+        className={cn(
+          "paperclip-mention-chip paperclip-mention-chip--issue group",
+          "inline-flex items-center gap-1 rounded-full border border-border py-0.5 pl-1 pr-2 text-xs",
+        )}
+        title={issue.title}
+        aria-label={`Issue ${issueLabel}: ${issue.title}`}
       >
-        <X className="h-3 w-3" />
-      </button>
-      {issue.identifier ? (
-        <Link
-          to={`/issues/${issueLabel}`}
-          className="inline-flex min-w-0 items-center gap-1 no-underline hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
-          aria-label={`Issue ${issueLabel}: ${issue.title}`}
+        <button
+          type="button"
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-colors transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring group-hover:opacity-100"
+          aria-label={removeLabel}
+          title={removeLabel}
+          onClick={handleRemove}
         >
-          {content}
-        </Link>
-      ) : (
-        <span className="inline-flex min-w-0 items-center gap-1">{content}</span>
-      )}
-    </span>
+          <X className="h-3 w-3" />
+        </button>
+        {issue.identifier ? (
+          <Link
+            to={`/issues/${issueLabel}`}
+            className="inline-flex min-w-0 items-center gap-1 no-underline hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            aria-label={`Issue ${issueLabel}: ${issue.title}`}
+          >
+            {content}
+          </Link>
+        ) : (
+          <span className="inline-flex min-w-0 items-center gap-1">{content}</span>
+        )}
+      </span>
+      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove blocker?</DialogTitle>
+            <DialogDescription>
+              Remove {confirmLabel} as a blocker for this issue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button type="button" variant="destructive" onClick={confirmRemove}>
+              Remove blocker
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

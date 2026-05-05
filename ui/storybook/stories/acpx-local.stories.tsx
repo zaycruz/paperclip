@@ -72,6 +72,7 @@ const acpxLocalConfigSchema: AdapterConfigSchema = {
       type: "toggle",
       default: false,
       hint: "Only applies when ACP agent is Codex. Requests Codex Fast mode through ACP session config.",
+      meta: { visibleWhen: { key: "agent", values: ["codex"] } },
     },
     { key: "timeoutSec", label: "Timeout seconds", type: "number", default: 0 },
     {

@@ -2435,6 +2435,29 @@ export function issueRoutes(
       },
     });
 
+    if (existing.status === "in_progress" && issue.status !== existing.status && issue.status !== "in_progress") {
+      const handoffStates = await listSuccessfulRunHandoffStates(db, issue.companyId, [issue.id]);
+      const handoff = handoffStates.get(issue.id);
+      if (handoff?.state === "required") {
+        await logActivity(db, {
+          companyId: issue.companyId,
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          agentId: actor.agentId,
+          runId: actor.runId,
+          action: "issue.successful_run_handoff_resolved",
+          entityType: "issue",
+          entityId: issue.id,
+          details: {
+            identifier: issue.identifier,
+            sourceRunId: handoff.sourceRunId,
+            correctiveRunId: handoff.correctiveRunId,
+            resolvedByStatus: issue.status,
+          },
+        });
+      }
+    }
+
     if (Array.isArray(req.body.blockedByIssueIds)) {
       const previousBlockedByIds = new Set((existingRelations?.blockedBy ?? []).map((relation) => relation.id));
       const nextBlockedByIds = new Set(req.body.blockedByIssueIds as string[]);

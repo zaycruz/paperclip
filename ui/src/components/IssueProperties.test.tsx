@@ -476,6 +476,52 @@ describe("IssueProperties", () => {
     act(() => root.unmount());
   });
 
+  it("removes a blocked-by issue from the chip remove action after confirmation", async () => {
+    const onUpdate = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const root = renderProperties(container, {
+      issue: createIssue({
+        blockedBy: [
+          {
+            id: "issue-2",
+            identifier: "PAP-2",
+            title: "Existing blocker",
+            status: "in_progress",
+            priority: "medium",
+            assigneeAgentId: null,
+            assigneeUserId: null,
+          },
+          {
+            id: "issue-4",
+            identifier: "PAP-4",
+            title: "Keep blocker",
+            status: "todo",
+            priority: "medium",
+            assigneeAgentId: null,
+            assigneeUserId: null,
+          },
+        ],
+      }),
+      childIssues: [],
+      onUpdate,
+      inline: true,
+    });
+    await flush();
+
+    const removeButton = container.querySelector('button[aria-label="Remove PAP-2 as blocker"]');
+    expect(removeButton).not.toBeNull();
+
+    await act(async () => {
+      removeButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith("Remove PAP-2: Existing blocker as a blocker?");
+    expect(onUpdate).toHaveBeenCalledWith({ blockedByIssueIds: ["issue-4"] });
+
+    confirmSpy.mockRestore();
+    act(() => root.unmount());
+  });
+
   it("shows a green service link above the workspace row for a live non-main workspace", async () => {
     mockProjectsApi.list.mockResolvedValue([createProject()]);
     const serviceUrl = "http://127.0.0.1:62475";
@@ -530,7 +576,7 @@ describe("IssueProperties", () => {
       (link) => link.textContent?.trim() === "View workspace",
     );
     expect(tasksLink).not.toBeUndefined();
-    expect(tasksLink?.getAttribute("href")).toBe("/issues?workspace=workspace-1");
+    expect(tasksLink?.getAttribute("href")).toBe("/execution-workspaces/workspace-1/issues");
     expect(workspaceLink).not.toBeUndefined();
     expect(workspaceLink?.getAttribute("href")).toBe("/execution-workspaces/workspace-1");
 

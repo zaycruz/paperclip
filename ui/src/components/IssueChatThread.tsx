@@ -1983,6 +1983,7 @@ function SystemNoticeCommentRow({
     .map((p) => p.text)
     .join("\n\n");
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const source = (() => {
     const runAgentName = runAgentId ? agentMap?.get(runAgentId)?.name ?? null : null;
@@ -2022,8 +2023,8 @@ function SystemNoticeCommentRow({
     if (!anchorId || typeof window === "undefined") return;
     const url = `${window.location.origin}${window.location.pathname}#${anchorId}`;
     void navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
     });
   };
 
@@ -2053,7 +2054,7 @@ function SystemNoticeCommentRow({
               aria-label="Copy link to system notice"
               onClick={handleCopyLink}
             >
-              <Paperclip className="h-3.5 w-3.5" />
+              {copiedLink ? <Check className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
             </button>
           ) : null}
           <button

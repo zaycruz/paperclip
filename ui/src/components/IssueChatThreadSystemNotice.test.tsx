@@ -275,6 +275,44 @@ describe("IssueChatThread system notice routing", () => {
     expect(sourceLink?.textContent).not.toBe("You");
   });
 
+  it("shows copy-link feedback on the link button only", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const comment: IssueChatComment = {
+      id: "comment-copy-link",
+      companyId: "company-1",
+      issueId: "issue-1",
+      authorType: "system",
+      authorAgentId: null,
+      authorUserId: null,
+      body: "System recovery completed.",
+      presentation: {
+        kind: "system_notice",
+        tone: "success",
+        title: null,
+        detailsDefaultOpen: false,
+      },
+      metadata: null,
+      ...baseTimestamps,
+    };
+
+    renderThread([comment]);
+
+    const copyLink = container.querySelector('button[aria-label="Copy link to system notice"]') as HTMLButtonElement;
+    const copyText = container.querySelector('button[aria-label="Copy system notice"]') as HTMLButtonElement;
+    await act(async () => {
+      copyLink.click();
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("#comment-comment-copy-link"));
+    expect(copyLink.querySelector(".lucide-check")).not.toBeNull();
+    expect(copyText.querySelector(".lucide-check")).toBeNull();
+  });
+
   it("labels system notice source as Paperclip when no run agent can be resolved", () => {
     const comment: IssueChatComment = {
       id: "comment-system-no-author",
@@ -333,7 +371,7 @@ describe("IssueChatThread system notice routing", () => {
     expect(sourceLink?.textContent).toBe("Paperclip");
   });
 
-  it("routes presentation.kind=system_notice to a system notice even when authorType is agent", () => {
+  it("keeps agent-authored comments as assistant bubbles even when presentation requests system_notice", () => {
     const comment: IssueChatComment = {
       id: "comment-agent-system",
       companyId: "company-1",
@@ -354,9 +392,7 @@ describe("IssueChatThread system notice routing", () => {
 
     renderThread([comment]);
 
-    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
-      "System notice",
-    );
-    expect(container.querySelector('[data-message-role="system"]')).not.toBeNull();
+    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[data-message-role="assistant"]')).not.toBeNull();
   });
 });

@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { issueExecutionDecisions } from "@paperclipai/db";
+import { activityLog, issueExecutionDecisions } from "@paperclipai/db";
 import {
   addIssueCommentSchema,
   acceptIssueThreadInteractionSchema,
@@ -32,6 +33,7 @@ import {
   isClosedIsolatedExecutionWorkspace,
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
   type ExecutionWorkspace,
+  type SuccessfulRunHandoffState,
 } from "@paperclipai/shared";
 import { trackAgentTaskCompleted } from "@paperclipai/shared/telemetry";
 import { getTelemetryClient } from "../telemetry.js";
@@ -59,7 +61,7 @@ import {
   workProductService,
 } from "../services/index.js";
 import { logger } from "../middleware/logger.js";
-import { conflict, forbidden, HttpError, notFound, unauthorized } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unauthorized, unprocessable } from "../errors.js";
 import { assertBoard, assertCompanyAccess, getActorInfo } from "./authz.js";
 import {
   assertNoAgentHostWorkspaceCommandMutation,
@@ -78,6 +80,7 @@ import { executionWorkspaceService as executionWorkspaceServiceDirect } from "..
 import { feedbackService } from "../services/feedback.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { environmentService } from "../services/environments.js";
+import { redactSensitiveText } from "../redaction.js";
 import {
   applyIssueExecutionPolicyTransition,
   normalizeIssueExecutionPolicy,
@@ -113,6 +116,128 @@ type ExecutionStageWakeContext = {
   lastDecisionOutcome: ParsedExecutionState["lastDecisionOutcome"];
   allowedActions: string[];
 };
+
+const SUCCESSFUL_RUN_HANDOFF_ACTIONS = [
+  "issue.successful_run_handoff_required",
+  "issue.successful_run_handoff_resolved",
+  "issue.successful_run_handoff_escalated",
+] as const;
+const ACTIVE_REVIEW_APPROVAL_STATUSES = new Set(["pending", "revision_requested"]);
+
+const INVALID_AGENT_IN_REVIEW_DISPOSITION_MESSAGE =
+  "invalid_issue_disposition: Agent-authored updates that move an issue to in_review must include a real review path. " +
+  "This request would leave the issue in_review without anyone or anything owning the next action. " +
+  "Keep working instead of moving to review, create a request_confirmation or ask_user_questions interaction, " +
+  "link or request a pending approval, assign a human reviewer with assigneeUserId, set a typed executionState.currentParticipant through an execution policy, " +
+  "or schedule an issue monitor for an external review/check. After creating one of those review paths, retry the status update.";
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function hasExecutionParticipant(value: unknown) {
+  const state = parseIssueExecutionState(value);
+  if (!state || state.status !== "pending") return false;
+  const participant = state.currentParticipant;
+  if (!participant) return false;
+  if (participant.type === "agent") return Boolean(participant.agentId);
+  if (participant.type === "user") return Boolean(participant.userId);
+  return false;
+}
+
+function hasScheduledMonitor(input: {
+  existingMonitorNextCheckAt?: Date | null;
+  patchMonitorNextCheckAt?: unknown;
+  executionPolicy?: unknown;
+}) {
+  if (input.patchMonitorNextCheckAt instanceof Date && !Number.isNaN(input.patchMonitorNextCheckAt.getTime())) return true;
+  if (input.patchMonitorNextCheckAt === undefined && input.existingMonitorNextCheckAt) return true;
+  const policy = normalizeIssueExecutionPolicy(input.executionPolicy ?? null);
+  return Boolean(policy?.monitor?.nextCheckAt);
+}
+
+function successfulRunHandoffStateFromActivity(row: {
+  action: string;
+  agentId: string | null;
+  runId: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: Date;
+}): SuccessfulRunHandoffState | null {
+  const details = row.details ?? {};
+  const state =
+    row.action === "issue.successful_run_handoff_required"
+      ? "required"
+      : row.action === "issue.successful_run_handoff_resolved"
+        ? "resolved"
+        : row.action === "issue.successful_run_handoff_escalated"
+          ? "escalated"
+          : null;
+  if (!state) return null;
+
+  const detectedProgressSummary =
+    readNonEmptyString(details.detectedProgressSummary)
+    ?? readNonEmptyString(details.detected_progress_summary)
+    ?? null;
+
+  return {
+    state,
+    required: state === "required",
+    sourceRunId:
+      readNonEmptyString(details.sourceRunId)
+      ?? readNonEmptyString(details.source_run_id)
+      ?? readNonEmptyString(details.resumeFromRunId)
+      ?? row.runId
+      ?? null,
+    correctiveRunId:
+      readNonEmptyString(details.correctiveRunId)
+      ?? readNonEmptyString(details.corrective_run_id)
+      ?? (state !== "required" ? row.runId : null),
+    assigneeAgentId:
+      readNonEmptyString(details.assigneeAgentId)
+      ?? readNonEmptyString(details.agentId)
+      ?? row.agentId
+      ?? null,
+    detectedProgressSummary: detectedProgressSummary
+      ? redactSensitiveText(detectedProgressSummary)
+      : null,
+    createdAt: row.createdAt,
+  };
+}
+
+async function listSuccessfulRunHandoffStates(
+  db: Db,
+  companyId: string,
+  issueIds: string[],
+): Promise<Map<string, SuccessfulRunHandoffState>> {
+  if (issueIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      entityId: activityLog.entityId,
+      action: activityLog.action,
+      agentId: activityLog.agentId,
+      runId: activityLog.runId,
+      details: activityLog.details,
+      createdAt: activityLog.createdAt,
+    })
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.companyId, companyId),
+        eq(activityLog.entityType, "issue"),
+        inArray(activityLog.entityId, issueIds),
+        inArray(activityLog.action, [...SUCCESSFUL_RUN_HANDOFF_ACTIONS]),
+      ),
+    )
+    .orderBy(desc(activityLog.createdAt));
+
+  const states = new Map<string, SuccessfulRunHandoffState>();
+  for (const row of rows) {
+    if (states.has(row.entityId)) continue;
+    const state = successfulRunHandoffStateFromActivity(row);
+    if (state) states.set(row.entityId, state);
+  }
+  return states;
+}
 
 function executionPrincipalsEqual(
   left: ParsedExecutionState["currentParticipant"] | null,
@@ -504,6 +629,59 @@ export function issueRoutes(
     );
   }
 
+  async function assertAgentInReviewReviewPath(input: {
+    existing: {
+      id: string;
+      companyId: string;
+      status: string;
+      assigneeUserId?: string | null;
+      executionState?: unknown;
+      monitorNextCheckAt?: Date | null;
+    };
+    updateFields: Record<string, unknown>;
+    actorType: string;
+  }) {
+    const nextStatus = typeof input.updateFields.status === "string"
+      ? input.updateFields.status
+      : input.existing.status;
+    if (input.actorType !== "agent" || input.existing.status === "in_review" || nextStatus !== "in_review") return;
+
+    const nextAssigneeUserId = input.updateFields.assigneeUserId === undefined
+      ? input.existing.assigneeUserId
+      : input.updateFields.assigneeUserId;
+    if (typeof nextAssigneeUserId === "string" && nextAssigneeUserId.trim().length > 0) return;
+
+    const nextExecutionState = input.updateFields.executionState === undefined
+      ? input.existing.executionState
+      : input.updateFields.executionState;
+    if (hasExecutionParticipant(nextExecutionState)) return;
+
+    const nextExecutionPolicy = input.updateFields.executionPolicy;
+    if (hasScheduledMonitor({
+      existingMonitorNextCheckAt: input.existing.monitorNextCheckAt ?? null,
+      patchMonitorNextCheckAt: input.updateFields.monitorNextCheckAt,
+      executionPolicy: nextExecutionPolicy,
+    })) return;
+
+    const interactions = await issueThreadInteractionService(db).listForIssue(input.existing.id);
+    if (interactions.some((interaction) => interaction.status === "pending")) return;
+
+    const approvals = await issueApprovalsSvc.listApprovalsForIssue(input.existing.id);
+    if (approvals.some((approval) => ACTIVE_REVIEW_APPROVAL_STATUSES.has(String(approval.status)))) return;
+
+    throw unprocessable(INVALID_AGENT_IN_REVIEW_DISPOSITION_MESSAGE, {
+      code: "invalid_issue_disposition",
+      missing: "review_path",
+      validReviewPaths: [
+        "pending_issue_thread_interaction",
+        "linked_pending_approval",
+        "human_assignee_user_id",
+        "typed_execution_state_current_participant",
+        "scheduled_issue_monitor",
+      ],
+    });
+  }
+
   async function logExpiredRequestConfirmations(input: {
     issue: { id: string; companyId: string; identifier?: string | null };
     interactions: Array<{ id: string; kind: string; status: string; result?: unknown }>;
@@ -709,6 +887,23 @@ export function issueRoutes(
       });
     }
     return true;
+  }
+
+  function assertStructuredCommentFieldsAllowed(
+    req: Request,
+    res: Response,
+    input: { presentation?: unknown; metadata?: unknown },
+  ) {
+    const hasStructuredFields = input.presentation !== undefined || input.metadata !== undefined;
+    if (!hasStructuredFields) return true;
+    if (req.actor.type === "board") return true;
+    res.status(403).json({
+      error: "Only board users may set structured comment presentation or metadata",
+      details: {
+        securityPrinciples: ["Least Privilege", "Secure Defaults", "Complete Mediation"],
+      },
+    });
+    return false;
   }
 
   async function assertExplicitResumeIntentAllowed(
@@ -1033,7 +1228,15 @@ export function issueRoutes(
       limit,
       offset,
     });
-    res.json(result);
+    const handoffStates = await listSuccessfulRunHandoffStates(
+      db,
+      companyId,
+      result.map((issue) => issue.id),
+    );
+    res.json(result.map((issue) => ({
+      ...issue,
+      successfulRunHandoff: handoffStates.get(issue.id) ?? null,
+    })));
   });
 
   router.get("/companies/:companyId/labels", async (req, res) => {
@@ -1221,6 +1424,7 @@ export function issueRoutes(
       blockerAttention,
       productivityReview,
       referenceSummary,
+      successfulRunHandoffStates,
     ] = await Promise.all([
       resolveIssueProjectAndGoal(issue),
       svc.getAncestors(issue.id),
@@ -1230,6 +1434,7 @@ export function issueRoutes(
       svc.listBlockerAttention(issue.companyId, [issue]).then((map) => map.get(issue.id) ?? null),
       svc.listProductivityReviews(issue.companyId, [issue.id]).then((map) => map.get(issue.id) ?? null),
       issueReferencesSvc.listIssueReferenceSummary(issue.id),
+      listSuccessfulRunHandoffStates(db, issue.companyId, [issue.id]),
     ]);
     const mentionedProjects = mentionedProjectIds.length > 0
       ? await projectsSvc.listByIds(issue.companyId, mentionedProjectIds)
@@ -1244,6 +1449,7 @@ export function issueRoutes(
       ancestors,
       ...(blockerAttention ? { blockerAttention } : {}),
       productivityReview,
+      successfulRunHandoff: successfulRunHandoffStates.get(issue.id) ?? null,
       blockedBy: relations.blockedBy,
       blocks: relations.blocks,
       relatedWork: referenceSummary,
@@ -2234,6 +2440,12 @@ export function issueRoutes(
       }
     }
 
+    await assertAgentInReviewReviewPath({
+      existing,
+      updateFields,
+      actorType: req.actor.type,
+    });
+
     const nextAssigneeAgentId =
       updateFields.assigneeAgentId === undefined ? existing.assigneeAgentId : (updateFields.assigneeAgentId as string | null);
     const nextAssigneeUserId =
@@ -2434,6 +2646,29 @@ export function issueRoutes(
         ),
       },
     });
+
+    if (existing.status === "in_progress" && issue.status !== existing.status && issue.status !== "in_progress") {
+      const handoffStates = await listSuccessfulRunHandoffStates(db, issue.companyId, [issue.id]);
+      const handoff = handoffStates.get(issue.id);
+      if (handoff?.state === "required") {
+        await logActivity(db, {
+          companyId: issue.companyId,
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          agentId: actor.agentId,
+          runId: actor.runId,
+          action: "issue.successful_run_handoff_resolved",
+          entityType: "issue",
+          entityId: issue.id,
+          details: {
+            identifier: issue.identifier,
+            sourceRunId: handoff.sourceRunId,
+            correctiveRunId: handoff.correctiveRunId,
+            resolvedByStatus: issue.status,
+          },
+        });
+      }
+    }
 
     if (Array.isArray(req.body.blockedByIssueIds)) {
       const previousBlockedByIds = new Set((existingRelations?.blockedBy ?? []).map((relation) => relation.id));
@@ -3589,6 +3824,10 @@ export function issueRoutes(
     }
     assertCompanyAccess(req, issue.companyId);
     if (!(await assertAgentIssueMutationAllowed(req, res, issue))) return;
+    if (!assertStructuredCommentFieldsAllowed(req, res, {
+      presentation: req.body.presentation,
+      metadata: req.body.metadata,
+    })) return;
     const closedExecutionWorkspace = await getClosedIssueExecutionWorkspace(issue);
     if (closedExecutionWorkspace) {
       respondClosedIssueExecutionWorkspace(res, closedExecutionWorkspace);
@@ -3688,6 +3927,10 @@ export function issueRoutes(
       agentId: actor.agentId ?? undefined,
       userId: actor.actorType === "user" ? actor.actorId : undefined,
       runId: actor.runId,
+    }, {
+      authorType: req.body.authorType ?? (actor.actorType === "agent" ? "agent" : "user"),
+      presentation: req.body.presentation ?? null,
+      metadata: req.body.metadata ?? null,
     });
     await issueReferencesSvc.syncComment(comment.id);
     const commentReferenceSummaryAfter = await issueReferencesSvc.listIssueReferenceSummary(currentIssue.id);

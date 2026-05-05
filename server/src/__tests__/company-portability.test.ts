@@ -35,9 +35,11 @@ const projectSvc = {
 
 const issueSvc = {
   list: vi.fn(),
+  listComments: vi.fn(),
   getById: vi.fn(),
   getByIdentifier: vi.fn(),
   create: vi.fn(),
+  addComment: vi.fn(),
 };
 
 const routineSvc = {
@@ -131,6 +133,14 @@ describe("company portability", () => {
       config,
       secretKeys: new Set<string>(),
     }));
+    issueSvc.listComments.mockResolvedValue([]);
+    issueSvc.addComment.mockResolvedValue({
+      id: "comment-imported",
+      body: "Imported comment",
+      authorType: "system",
+      presentation: null,
+      metadata: null,
+    });
     companySvc.getById.mockResolvedValue({
       id: "company-1",
       name: "Paperclip",
@@ -2399,6 +2409,127 @@ describe("company portability", () => {
     );
   });
 
+  it("preserves issue comment presentation fields through export and import", async () => {
+    const portability = companyPortabilityService({} as any);
+    const presentation = { kind: "system_notice", tone: "warning", detailsDefaultOpen: false };
+    const metadata = {
+      version: 1,
+      sections: [{ rows: [{ type: "key_value", label: "Cause", value: "successful_run_missing_state" }] }],
+    };
+
+    projectSvc.list.mockResolvedValue([]);
+    projectSvc.listWorkspaces.mockResolvedValue([]);
+    issueSvc.list.mockResolvedValue([
+      {
+        id: "issue-1",
+        identifier: "PAP-1",
+        title: "Needs disposition",
+        description: "System notice source",
+        projectId: null,
+        projectWorkspaceId: null,
+        assigneeAgentId: null,
+        status: "todo",
+        priority: "high",
+        labelIds: [],
+        billingCode: null,
+        executionWorkspaceSettings: null,
+        assigneeAdapterOverrides: null,
+      },
+    ]);
+    issueSvc.listComments.mockResolvedValue([
+      {
+        id: "comment-1",
+        issueId: "issue-1",
+        companyId: "company-1",
+        authorType: "system",
+        authorAgentId: null,
+        authorUserId: null,
+        body: "Paperclip needs a disposition before this issue can continue.",
+        presentation,
+        metadata,
+        createdAt: new Date("2026-05-04T12:00:00.000Z"),
+        updatedAt: new Date("2026-05-04T12:00:00.000Z"),
+      },
+    ]);
+
+    const exported = await portability.exportBundle("company-1", {
+      include: { company: true, agents: false, projects: false, issues: true },
+    });
+
+    const extension = asTextFile(exported.files[".paperclip.yaml"]);
+    expect(extension).toContain("comments:");
+    expect(extension).toContain("system_notice");
+    expect(extension).toContain("successful_run_missing_state");
+
+    companySvc.create.mockResolvedValue({ id: "company-imported", name: "Imported" });
+    accessSvc.ensureMembership.mockResolvedValue(undefined);
+    agentSvc.list.mockResolvedValue([]);
+    projectSvc.list.mockResolvedValue([]);
+    issueSvc.create.mockResolvedValue({ id: "issue-imported", title: "Needs disposition" });
+
+    await portability.importBundle({
+      source: { type: "inline", rootPath: exported.rootPath, files: exported.files },
+      include: { company: true, agents: false, projects: false, issues: true },
+      target: { mode: "new_company", newCompanyName: "Imported" },
+      agents: "all",
+      collisionStrategy: "rename",
+    }, "user-1");
+
+    expect(issueSvc.addComment).toHaveBeenCalledWith(
+      "issue-imported",
+      "Paperclip needs a disposition before this issue can continue.",
+      { agentId: undefined, userId: undefined },
+      { authorType: "system", presentation, metadata },
+    );
+  });
+
+  it("does not export raw comment author user ids", async () => {
+    const portability = companyPortabilityService({} as any);
+
+    projectSvc.list.mockResolvedValue([]);
+    projectSvc.listWorkspaces.mockResolvedValue([]);
+    issueSvc.list.mockResolvedValue([
+      {
+        id: "issue-1",
+        identifier: "PAP-1",
+        title: "Private board note",
+        description: null,
+        projectId: null,
+        projectWorkspaceId: null,
+        assigneeAgentId: null,
+        status: "todo",
+        priority: "medium",
+        labelIds: [],
+        billingCode: null,
+        executionWorkspaceSettings: null,
+        assigneeAdapterOverrides: null,
+      },
+    ]);
+    issueSvc.listComments.mockResolvedValue([
+      {
+        id: "comment-1",
+        issueId: "issue-1",
+        companyId: "company-1",
+        authorType: "user",
+        authorAgentId: null,
+        authorUserId: "local-board",
+        body: "Need private follow-up.",
+        presentation: null,
+        metadata: null,
+        createdAt: new Date("2026-05-04T12:00:00.000Z"),
+        updatedAt: new Date("2026-05-04T12:00:00.000Z"),
+      },
+    ]);
+
+    const exported = await portability.exportBundle("company-1", {
+      include: { company: true, agents: false, projects: false, issues: true },
+    });
+
+    const extension = asTextFile(exported.files[".paperclip.yaml"]);
+    expect(extension).toContain('authorType: "user"');
+    expect(extension).not.toContain("authorUserId: local-board");
+  });
+
   it("strips root AGENTS frontmatter when importing a nested agent entry path", async () => {
     const portability = companyPortabilityService({} as any);
 
@@ -2569,7 +2700,9 @@ describe("company portability", () => {
 
     expect(secretSvc.normalizeAdapterConfigForPersistence).toHaveBeenCalledWith(
       "company-imported",
-      expect.any(Object),
+      expect.objectContaining({
+        dangerouslySkipPermissions: true,
+      }),
       { strictMode: false },
     );
     expect(agentSvc.create).toHaveBeenCalledWith("company-imported", expect.objectContaining({
@@ -2635,7 +2768,11 @@ describe("company portability", () => {
 
     expect(secretSvc.normalizeAdapterConfigForPersistence).toHaveBeenCalledWith(
       "company-1",
-      expect.any(Object),
+      expect.objectContaining({
+        model: "gpt-5.4",
+        dangerouslyBypassApprovalsAndSandbox: true,
+        extraArgs: ["--skip-git-repo-check"],
+      }),
       { strictMode: false },
     );
     expect(agentSvc.update).toHaveBeenCalledWith("agent-1", expect.objectContaining({

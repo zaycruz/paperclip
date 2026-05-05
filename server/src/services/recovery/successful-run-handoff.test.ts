@@ -8,6 +8,7 @@ import {
   buildSuccessfulRunHandoffExhaustedNotice,
   buildSuccessfulRunHandoffRequiredNotice,
   decideSuccessfulRunHandoff,
+  isIdempotentFinishSuccessfulRunHandoffWakeStatus,
   isSuccessfulRunHandoffRequiredNoticeBody,
 } from "./successful-run-handoff.js";
 
@@ -181,6 +182,14 @@ describe("successful run handoff decision", () => {
       issueId: "issue-1",
       sourceRunId: "run-1",
     })).toBe("finish_successful_run_handoff:issue-1:run-1:1");
+  });
+
+  it("allows failed or cancelled corrective wakes to be retried", () => {
+    expect(isIdempotentFinishSuccessfulRunHandoffWakeStatus("queued")).toBe(true);
+    expect(isIdempotentFinishSuccessfulRunHandoffWakeStatus("claimed")).toBe(true);
+    expect(isIdempotentFinishSuccessfulRunHandoffWakeStatus("completed")).toBe(true);
+    expect(isIdempotentFinishSuccessfulRunHandoffWakeStatus("failed")).toBe(false);
+    expect(isIdempotentFinishSuccessfulRunHandoffWakeStatus("cancelled")).toBe(false);
   });
 
   it("builds the required system notice with hidden structured metadata", () => {

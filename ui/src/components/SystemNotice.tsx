@@ -2,6 +2,7 @@ import { useId, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   CircleAlert,
+  CircleCheck,
   Info,
   OctagonAlert,
   TriangleAlert,
@@ -72,7 +73,7 @@ const TONE_TOKENS: Record<SystemNoticeTone, ToneTokens> = {
     container:
       "border-emerald-300/70 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10",
     iconWrap: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200",
-    icon: CircleAlert,
+    icon: CircleCheck,
     iconClass: "text-emerald-700 dark:text-emerald-300",
     label: "text-emerald-800 dark:text-emerald-200",
     divider: "border-emerald-300/50 dark:border-emerald-500/30",

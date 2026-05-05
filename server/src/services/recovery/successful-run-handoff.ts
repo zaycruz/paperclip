@@ -35,9 +35,12 @@ const IDEMPOTENT_HANDOFF_WAKE_STATUSES = [
   "deferred_issue_execution",
   "claimed",
   "completed",
-  "failed",
-  "cancelled",
 ];
+const IDEMPOTENT_HANDOFF_WAKE_STATUS_SET = new Set<string>(IDEMPOTENT_HANDOFF_WAKE_STATUSES);
+
+export function isIdempotentFinishSuccessfulRunHandoffWakeStatus(status: string) {
+  return IDEMPOTENT_HANDOFF_WAKE_STATUS_SET.has(status);
+}
 
 type HeartbeatRunRow = typeof heartbeatRuns.$inferSelect;
 type IssueRow = Pick<

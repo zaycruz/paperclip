@@ -1258,9 +1258,12 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
           id: randomUUID(),
           companyId: parentIssue.companyId,
           issueId,
+          authorType: options?.authorAgentId ? "agent" : "system",
           authorAgentId: options?.authorAgentId ?? null,
           authorUserId: null,
           body,
+          presentation: null,
+          metadata: null,
           createdAt: now,
           updatedAt: now,
         };

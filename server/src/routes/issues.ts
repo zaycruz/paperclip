@@ -487,7 +487,11 @@ export function issueRoutes(
   });
   const feedback = feedbackService(db);
   const companiesSvc = companyService(db);
-  const searchSvc = opts.searchService ?? companySearchService(db);
+  let searchSvc = opts.searchService ?? null;
+  const getSearchService = () => {
+    searchSvc ??= companySearchService(db);
+    return searchSvc;
+  };
   const searchRateLimiter = opts.searchRateLimiter ?? defaultCompanySearchRateLimiter;
   const instanceSettings = instanceSettingsService(db);
   const agentsSvc = agentService(db);
@@ -993,7 +997,7 @@ export function issueRoutes(
       });
       return;
     }
-    const result = await searchSvc.search(companyId, query);
+    const result = await getSearchService().search(companyId, query);
     res.json(result);
   });
 

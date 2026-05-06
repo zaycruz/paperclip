@@ -131,6 +131,22 @@ DATABASE_URL=postgres://postgres.[PROJECT-REF]:[PASSWORD]@...5432/postgres \
 
 See [Supabase pricing](https://supabase.com/pricing) for current details.
 
+## 4. Cloud SQL on Cloud Run
+
+Cloud Run deployments can connect to Google Cloud SQL over the instance's Unix socket. Use a `DATABASE_URL` with a libpq-style `host=/cloudsql/...` query parameter:
+
+```sh
+DATABASE_URL='postgresql://paperclip:PASSWORD@localhost/paperclip?host=/cloudsql/PROJECT:REGION:INSTANCE'
+```
+
+Paperclip removes the `host` query parameter before passing the URL to `postgres.js` and sets the socket path internally to:
+
+```text
+/cloudsql/PROJECT:REGION:INSTANCE/.s.PGSQL.5432
+```
+
+Keep this connection string in a secret manager. Do not log raw `DATABASE_URL` values or place them in checked-in environment files.
+
 ## Switching between modes
 
 The database mode is controlled by `DATABASE_URL`:
@@ -140,6 +156,7 @@ The database mode is controlled by `DATABASE_URL`:
 | Not set | Embedded PostgreSQL (`~/.paperclip/instances/default/db/`) |
 | `postgres://...localhost...` | Local Docker PostgreSQL |
 | `postgres://...supabase.com...` | Hosted Supabase |
+| `postgresql://...localhost...?host=/cloudsql/...` | Google Cloud SQL Unix socket |
 
 Your Drizzle schema (`packages/db/src/schema/`) stays the same regardless of mode.
 

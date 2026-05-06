@@ -237,7 +237,7 @@ function runGeneralSuites(routeTests) {
   }
 
   runVitest(
-    ["--project", "@paperclipai/server", ...excludeRouteArgs],
+    ["--project", "@paperclipai/server", "--no-file-parallelism", ...excludeRouteArgs],
     `server suites excluding ${routeTests.length} serialized suites`,
   );
 }

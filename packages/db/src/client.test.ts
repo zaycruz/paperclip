@@ -5,6 +5,7 @@ import postgres from "postgres";
 import {
   applyPendingMigrations,
   inspectMigrations,
+  normalizePostgresConnection,
 } from "./client.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -41,6 +42,32 @@ if (!embeddedPostgresSupport.supported) {
     `Skipping embedded Postgres migration tests on this host: ${embeddedPostgresSupport.reason ?? "unsupported environment"}`,
   );
 }
+
+describe("normalizePostgresConnection", () => {
+  it("maps Cloud SQL host query strings to postgres.js socket paths", () => {
+    const onnotice = () => {};
+    const normalized = normalizePostgresConnection(
+      "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:us-east1:instance",
+      { max: 1, onnotice },
+    );
+
+    expect(normalized.url).toBe("postgresql://paperclip:secret@localhost/paperclip");
+    expect(normalized.options).toEqual({
+      max: 1,
+      onnotice,
+      path: "/cloudsql/project:us-east1:instance/.s.PGSQL.5432",
+    });
+  });
+
+  it("preserves non-Cloud-SQL connection strings", () => {
+    const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
+
+    expect(normalizePostgresConnection(url, { max: 1 })).toEqual({
+      url,
+      options: { max: 1 },
+    });
+  });
+});
 
 describeEmbeddedPostgres("applyPendingMigrations", () => {
   it(

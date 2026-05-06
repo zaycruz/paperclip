@@ -928,8 +928,41 @@ function redactConnectionStringForLog(value: string): string {
   return value;
 }
 
-function redactStartupError(err: unknown): unknown {
-  if (!(err instanceof Error)) return err;
+function redactStartupValueForLog(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (typeof value === "string") return redactConnectionStringForLog(value);
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) return "[Circular]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactStartupValueForLog(item, seen));
+  }
+
+  const record: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    record[key] = redactStartupValueForLog(entry, seen);
+  }
+  return record;
+}
+
+export function redactStartupError(err: unknown): unknown {
+  if (typeof err === "string") {
+    return {
+      type: "string",
+      message: redactConnectionStringForLog(err),
+    };
+  }
+
+  if (!(err instanceof Error)) {
+    if (err && typeof err === "object") {
+      const redacted = redactStartupValueForLog(err);
+      return {
+        type: err.constructor?.name || "object",
+        ...(redacted && typeof redacted === "object" && !Array.isArray(redacted) ? redacted : { value: redacted }),
+      };
+    }
+    return err;
+  }
 
   const source = err as Error & Record<string, unknown>;
   const record: Record<string, unknown> = {

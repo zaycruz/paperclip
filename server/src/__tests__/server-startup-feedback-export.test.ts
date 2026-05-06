@@ -192,7 +192,37 @@ vi.mock("../auth/better-auth.js", () => ({
   resolveBetterAuthSessionFromHeaders: vi.fn(async () => null),
 }));
 
-import { startServer } from "../index.ts";
+import { redactStartupError, startServer } from "../index.ts";
+
+describe("startup error redaction", () => {
+  it("redacts Postgres credentials from thrown strings", () => {
+    expect(redactStartupError("failed for postgres://paperclip:secret@db.example/paperclip")).toEqual({
+      type: "string",
+      message: "failed for postgres://paperclip:***@db.example/paperclip",
+    });
+  });
+
+  it("redacts Postgres credentials from plain object payloads", () => {
+    expect(
+      redactStartupError({
+        message: "failed",
+        input: "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:region:instance",
+        nested: {
+          databaseUrl: "postgres://paperclip:another-secret@db.example/paperclip",
+        },
+        attempts: ["postgres://paperclip:list-secret@db.example/paperclip"],
+      }),
+    ).toEqual({
+      type: "Object",
+      message: "failed",
+      input: "postgresql://paperclip:***@localhost/paperclip?host=/cloudsql/project:region:instance",
+      nested: {
+        databaseUrl: "postgres://paperclip:***@db.example/paperclip",
+      },
+      attempts: ["postgres://paperclip:***@db.example/paperclip"],
+    });
+  });
+});
 
 describe("startServer feedback export wiring", () => {
   beforeEach(() => {

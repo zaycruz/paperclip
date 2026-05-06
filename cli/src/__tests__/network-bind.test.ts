@@ -1,6 +1,25 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveRuntimeBind, validateConfiguredBindMode } from "@paperclipai/shared";
 import { buildPresetServerConfig } from "../config/server-bind.js";
+
+function withNoTailscaleOnPath<T>(run: () => T): T {
+  const originalPath = process.env.PATH;
+  const emptyBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-no-tailscale-"));
+  process.env.PATH = emptyBinDir;
+  try {
+    return run();
+  } finally {
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+    fs.rmSync(emptyBinDir, { recursive: true, force: true });
+  }
+}
 
 describe("network bind helpers", () => {
   it("rejects non-loopback bind modes in local_trusted", () => {
@@ -51,11 +70,13 @@ describe("network bind helpers", () => {
   it("falls back to loopback when no tailscale address is available for tailnet presets", () => {
     delete process.env.PAPERCLIP_TAILNET_BIND_HOST;
 
-    const preset = buildPresetServerConfig("tailnet", {
-      port: 3100,
-      allowedHostnames: [],
-      serveUi: true,
-    });
+    const preset = withNoTailscaleOnPath(() =>
+      buildPresetServerConfig("tailnet", {
+        port: 3100,
+        allowedHostnames: [],
+        serveUi: true,
+      }),
+    );
 
     expect(preset.server.host).toBe("127.0.0.1");
   });

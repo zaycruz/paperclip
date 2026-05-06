@@ -1,3 +1,4 @@
+import "../express-actor.js";
 import type { Request } from "express";
 import { forbidden, unauthorized } from "../errors.js";
 

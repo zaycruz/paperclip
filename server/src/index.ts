@@ -1,4 +1,3 @@
-/// <reference path="./types/express.d.ts" />
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
@@ -915,9 +914,41 @@ function isMainModule(metaUrl: string): boolean {
   }
 }
 
+function redactConnectionStringForLog(value: string): string {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:") {
+      if (parsed.password) parsed.password = "***";
+      return parsed.toString();
+    }
+  } catch {
+    return value.replace(/(postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+@/g, "$1***@");
+  }
+
+  return value;
+}
+
+function redactStartupError(err: unknown): unknown {
+  if (!(err instanceof Error)) return err;
+
+  const source = err as Error & Record<string, unknown>;
+  const record: Record<string, unknown> = {
+    type: err.constructor.name,
+    message: redactConnectionStringForLog(err.message),
+    stack: typeof err.stack === "string" ? redactConnectionStringForLog(err.stack) : err.stack,
+  };
+
+  for (const key of ["code", "errno", "syscall", "address", "port", "input"]) {
+    const value = source[key];
+    record[key] = typeof value === "string" ? redactConnectionStringForLog(value) : value;
+  }
+
+  return record;
+}
+
 if (isMainModule(import.meta.url)) {
   void startServer().catch((err) => {
-    logger.error({ err }, "Paperclip server failed to start");
+    logger.error({ err: redactStartupError(err) }, "Paperclip server failed to start");
     process.exit(1);
   });
 }

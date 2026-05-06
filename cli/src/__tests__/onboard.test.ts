@@ -79,6 +79,22 @@ function createFreshConfigPath() {
   return path.join(root, ".paperclip", "config.json");
 }
 
+async function withNoTailscaleOnPath<T>(run: () => Promise<T>): Promise<T> {
+  const originalPath = process.env.PATH;
+  const emptyBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-no-tailscale-"));
+  process.env.PATH = emptyBinDir;
+  try {
+    return await run();
+  } finally {
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
+    fs.rmSync(emptyBinDir, { recursive: true, force: true });
+  }
+}
+
 describe("onboard", () => {
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
@@ -142,7 +158,9 @@ describe("onboard", () => {
     const configPath = createFreshConfigPath();
     delete process.env.PAPERCLIP_TAILNET_BIND_HOST;
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
+    await withNoTailscaleOnPath(() =>
+      onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" }),
+    );
 
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
     expect(raw.server.deploymentMode).toBe("authenticated");

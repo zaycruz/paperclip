@@ -10,8 +10,47 @@ const MIGRATIONS_FOLDER = fileURLToPath(new URL("./migrations", import.meta.url)
 const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
 const MIGRATIONS_JOURNAL_JSON = fileURLToPath(new URL("./migrations/meta/_journal.json", import.meta.url));
 
+type PostgresOptions = {
+  max?: number;
+  onnotice?: () => void;
+  connect_timeout?: number;
+  path?: string;
+};
+
+export type NormalizedPostgresConnection = {
+  url: string;
+  options: PostgresOptions;
+};
+
+export function normalizePostgresConnection(
+  url: string,
+  options: PostgresOptions = {},
+): NormalizedPostgresConnection {
+  try {
+    const parsed = new URL(url);
+    const socketPath = parsed.searchParams.get("host");
+    if (socketPath?.startsWith("/cloudsql/")) {
+      const port = parsed.port || parsed.searchParams.get("port") || "5432";
+      parsed.searchParams.delete("host");
+      return {
+        url: parsed.toString(),
+        options: { ...options, path: `${socketPath}/.s.PGSQL.${port}` },
+      };
+    }
+  } catch {
+    return { url, options };
+  }
+
+  return { url, options };
+}
+
+export function createPostgresSql(url: string, options: PostgresOptions = {}) {
+  const normalized = normalizePostgresConnection(url, options);
+  return postgres(normalized.url, normalized.options);
+}
+
 function createUtilitySql(url: string) {
-  return postgres(url, { max: 1, onnotice: () => {} });
+  return createPostgresSql(url, { max: 1, onnotice: () => {} });
 }
 
 function isSafeIdentifier(value: string): boolean {
@@ -46,7 +85,7 @@ export type MigrationState =
     };
 
 export function createDb(url: string) {
-  const sql = postgres(url);
+  const sql = createPostgresSql(url);
   return drizzlePg(sql, { schema });
 }
 

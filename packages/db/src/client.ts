@@ -10,12 +10,7 @@ const MIGRATIONS_FOLDER = fileURLToPath(new URL("./migrations", import.meta.url)
 const DRIZZLE_MIGRATIONS_TABLE = "__drizzle_migrations";
 const MIGRATIONS_JOURNAL_JSON = fileURLToPath(new URL("./migrations/meta/_journal.json", import.meta.url));
 
-type PostgresOptions = {
-  max?: number;
-  onnotice?: () => void;
-  connect_timeout?: number;
-  path?: string;
-};
+type PostgresOptions = NonNullable<Parameters<typeof postgres>[1]>;
 
 export type NormalizedPostgresConnection = {
   url: string;
@@ -32,6 +27,7 @@ export function normalizePostgresConnection(
     if (socketPath?.startsWith("/cloudsql/")) {
       const port = parsed.port || parsed.searchParams.get("port") || "5432";
       parsed.searchParams.delete("host");
+      parsed.searchParams.delete("port");
       return {
         url: parsed.toString(),
         options: { ...options, path: `${socketPath}/.s.PGSQL.${port}` },

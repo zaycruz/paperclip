@@ -477,7 +477,7 @@ function useIssueCreateErrorMock(enabled: boolean) {
         }
         return originalFetch.call(window, input, init);
       },
-      { preconnect: originalFetch.preconnect },
+      originalFetch,
     ) as typeof window.fetch;
     window.fetch = issueCreateErrorFetch;
 

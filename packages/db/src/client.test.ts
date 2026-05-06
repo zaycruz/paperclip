@@ -59,6 +59,16 @@ describe("normalizePostgresConnection", () => {
     });
   });
 
+  it("removes Cloud SQL port query strings after folding them into the socket path", () => {
+    const normalized = normalizePostgresConnection(
+      "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:us-east1:instance&port=5433",
+      { max: 1 },
+    );
+
+    expect(normalized.url).toBe("postgresql://paperclip:secret@localhost/paperclip");
+    expect(normalized.options.path).toBe("/cloudsql/project:us-east1:instance/.s.PGSQL.5433");
+  });
+
   it("preserves non-Cloud-SQL connection strings", () => {
     const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
 

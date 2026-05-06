@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { onboard } from "../commands/onboard.js";
 import type { PaperclipConfig } from "../config/schema.js";
+import { withNoTailscaleOnPath } from "./test-helpers.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -77,22 +78,6 @@ function createExistingConfigFixture() {
 function createFreshConfigPath() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-onboard-fresh-"));
   return path.join(root, ".paperclip", "config.json");
-}
-
-async function withNoTailscaleOnPath<T>(run: () => Promise<T>): Promise<T> {
-  const originalPath = process.env.PATH;
-  const emptyBinDir = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-no-tailscale-"));
-  process.env.PATH = emptyBinDir;
-  try {
-    return await run();
-  } finally {
-    if (originalPath === undefined) {
-      delete process.env.PATH;
-    } else {
-      process.env.PATH = originalPath;
-    }
-    fs.rmSync(emptyBinDir, { recursive: true, force: true });
-  }
 }
 
 describe("onboard", () => {

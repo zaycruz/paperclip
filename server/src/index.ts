@@ -915,17 +915,37 @@ function isMainModule(metaUrl: string): boolean {
 }
 
 function redactConnectionStringForLog(value: string): string {
+  const redactParsedPostgresUrl = (parsed: URL): string | null => {
+    if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") return null;
+    if (parsed.password) parsed.password = "***";
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (["password", "sslpassword", "passfile", "passwd", "pwd"].includes(key.toLowerCase())) {
+        parsed.searchParams.set(key, "***");
+      }
+    }
+    return parsed.toString();
+  };
+
   try {
     const parsed = new URL(value);
-    if (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:") {
-      if (parsed.password) parsed.password = "***";
-      return parsed.toString();
-    }
+    const redacted = redactParsedPostgresUrl(parsed);
+    if (redacted) return redacted;
   } catch {
-    return value.replace(/(postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+@/g, "$1***@");
+    // Fall through to redact embedded connection strings in arbitrary log text.
   }
 
-  return value;
+  return value.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/g, (match) => {
+    try {
+      const parsed = new URL(match);
+      const redacted = redactParsedPostgresUrl(parsed);
+      if (redacted) return redacted;
+    } catch {
+      // Use conservative regex fallback below.
+    }
+    return match
+      .replace(/(postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+@/g, "$1***@")
+      .replace(/([?&](?:password|sslpassword|passfile|passwd|pwd)=)[^&#\s]+/gi, "$1***");
+  });
 }
 
 function redactStartupValueForLog(value: unknown, seen = new WeakSet<object>()): unknown {

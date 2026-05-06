@@ -222,6 +222,26 @@ describe("startup error redaction", () => {
       attempts: ["postgres://paperclip:***@db.example/paperclip"],
     });
   });
+
+  it("redacts Postgres query-parameter secrets from startup payloads", () => {
+    const redacted = redactStartupError({
+      message: "failed for postgres://paperclip@db.example/paperclip?password=secret&sslpassword=ssl-secret",
+      connection:
+        "postgresql://paperclip@db.example/paperclip?passfile=/tmp/secret.pgpass&pwd=short-secret&sslmode=require",
+      nested: {
+        databaseUrl: "postgres://paperclip@db.example/paperclip?passwd=legacy-secret",
+      },
+    });
+
+    const serialized = JSON.stringify(redacted);
+    expect(serialized).not.toContain("secret");
+    expect(serialized).not.toContain("/tmp/secret.pgpass");
+    expect(serialized).toContain("password=***");
+    expect(serialized).toContain("sslpassword=***");
+    expect(serialized).toContain("passfile=***");
+    expect(serialized).toContain("pwd=***");
+    expect(serialized).toContain("passwd=***");
+  });
 });
 
 describe("startServer feedback export wiring", () => {

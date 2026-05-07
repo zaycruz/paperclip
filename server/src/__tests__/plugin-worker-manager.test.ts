@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendStderrExcerpt, formatWorkerFailureMessage } from "../services/plugin-worker-manager.js";
+import { appendStderrExcerpt, formatWorkerFailureMessage, resolveInitializeTimeoutMs } from "../services/plugin-worker-manager.js";
 
 describe("plugin-worker-manager stderr failure context", () => {
   it("appends worker stderr context to failure messages", () => {
@@ -39,5 +39,17 @@ describe("plugin-worker-manager stderr failure context", () => {
     expect(excerpt).not.toContain("first line");
     expect(excerpt).not.toContain("second line");
     expect(excerpt.length).toBeLessThanOrEqual(8_000);
+  });
+});
+
+describe("plugin-worker-manager initialize timeout", () => {
+  it("defaults to the hosted-safe initialize timeout", () => {
+    expect(resolveInitializeTimeoutMs("")).toBe(60_000);
+    expect(resolveInitializeTimeoutMs("not-a-number")).toBe(60_000);
+  });
+
+  it("keeps the old initialize timeout as the minimum override", () => {
+    expect(resolveInitializeTimeoutMs("1000")).toBe(15_000);
+    expect(resolveInitializeTimeoutMs("45000")).toBe(45_000);
   });
 });

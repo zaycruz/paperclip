@@ -56,6 +56,7 @@ import { setPluginEventBus } from "./services/activity-log.js";
 import { createPluginDevWatcher } from "./services/plugin-dev-watcher.js";
 import { createPluginHostServiceCleanup } from "./services/plugin-host-service-cleanup.js";
 import { pluginRegistryService } from "./services/plugin-registry.js";
+import { bootstrapConfiguredLocalPlugins } from "./services/plugin-bootstrap.js";
 import { createHostClientHandlers } from "@paperclipai/plugin-sdk";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import { createCachedViteHtmlRenderer } from "./vite-html-renderer.js";
@@ -433,7 +434,15 @@ export async function createApp(
         devWatcher.watch(loaded.plugin.id, loaded.plugin.packagePath);
       }
     }
+  }).then(() => bootstrapConfiguredLocalPlugins({
+    rawPaths: process.env.PAPERCLIP_BOOTSTRAP_PLUGIN_PATHS,
+    loader,
+    registry: pluginRegistry,
+    lifecycle,
+    logger,
   }).catch((err) => {
+    logger.error({ err }, "Failed to bootstrap plugins on startup");
+  })).catch((err) => {
     logger.error({ err }, "Failed to load ready plugins on startup");
   });
   process.once("exit", () => {

@@ -60,8 +60,16 @@ const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 /** Hard upper bound for any RPC timeout (5 minutes). Prevents unbounded waits. */
 const MAX_RPC_TIMEOUT_MS = 5 * 60 * 1_000;
 
-/** Timeout for the initialize RPC call. */
-const INITIALIZE_TIMEOUT_MS = 15_000;
+/** Timeout for the initialize RPC call. Hosted cold starts can take longer than local process spawns. */
+const DEFAULT_INITIALIZE_TIMEOUT_MS = 60_000;
+const MIN_INITIALIZE_TIMEOUT_MS = 15_000;
+
+export function resolveInitializeTimeoutMs(raw = process.env.PAPERCLIP_PLUGIN_INITIALIZE_TIMEOUT_MS): number {
+  if (!raw) return DEFAULT_INITIALIZE_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_INITIALIZE_TIMEOUT_MS;
+  return Math.max(MIN_INITIALIZE_TIMEOUT_MS, parsed);
+}
 
 /** Timeout for the shutdown RPC call before escalating to SIGTERM. */
 const SHUTDOWN_DRAIN_MS = 10_000;
@@ -837,7 +845,7 @@ export function createPluginWorkerHandle(
       const result = await callInternal(
         "initialize",
         initParams,
-        INITIALIZE_TIMEOUT_MS,
+        resolveInitializeTimeoutMs(),
       ) as { ok?: boolean; supportedMethods?: string[] } | undefined;
       if (!result || !result.ok) {
         throw new Error("Worker initialize returned ok=false");

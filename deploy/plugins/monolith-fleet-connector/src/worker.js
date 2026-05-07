@@ -548,4 +548,6 @@ const plugin = definePlugin({
 });
 
 export default plugin;
-runWorker(plugin, import.meta.url);
+if (process.env.PAPERCLIP_PLUGIN_DISABLE_AUTORUN !== "1") {
+  runWorker(plugin, import.meta.url);
+}

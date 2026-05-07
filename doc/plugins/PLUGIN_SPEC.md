@@ -27,6 +27,7 @@ Current limitations to keep in mind:
 - Published npm packages are the intended install artifact for deployed plugins.
 - The repo example plugins under `packages/plugins/examples/` are development conveniences. They work from a source checkout and should not be assumed to exist in a generic published build unless they are explicitly shipped with that build.
 - Dynamic plugin install is not yet cloud-ready for horizontally scaled or ephemeral deployments. There is no shared artifact store, install coordination, or cross-node distribution layer yet.
+- Hosted single-node images can pre-bake trusted local plugin packages and set `PAPERCLIP_BOOTSTRAP_PLUGIN_PATHS` to install and load them on startup. This is a deployment bootstrap escape hatch, not a marketplace or dynamic cloud distribution layer.
 - The current runtime ships a small host-provided plugin UI component kit through `@paperclipai/plugin-sdk/ui`, but does not support plugin asset uploads/reads yet. Treat plugin asset APIs as future-scope ideas, not current implementation promises.
 - Scoped plugin API routes are JSON-only and must be declared in `apiRoutes`.
   They mount under `/api/plugins/:pluginId/api/*`; plugins cannot shadow core
@@ -239,6 +240,8 @@ Suggested layout:
 The package install directory and the plugin data directory are separate.
 
 This on-disk model is the reason the current implementation expects a persistent writable host filesystem. Cloud-safe artifact replication is future work.
+
+For hosted single-node images, operators may bake trusted plugin packages into the image and set `PAPERCLIP_BOOTSTRAP_PLUGIN_PATHS` to a comma-separated, newline-separated, or JSON-array list of absolute local package paths. On startup, Paperclip installs missing bootstrap plugins, loads rows left in `installed`, retries rows in `error`, and leaves `ready`, `disabled`, and `upgrade_pending` rows alone.
 
 ## 8.2 Operator Commands
 

@@ -909,6 +909,15 @@ export function pluginRoutes(
       const existingPlugin = await registry.getByKey(discovered.manifest.id);
       if (existingPlugin) {
         await lifecycle.load(existingPlugin.id);
+        if (loader.hasRuntimeServices()) {
+          const loadResult = await loader.loadSingle(existingPlugin.id);
+          if (!loadResult.success) {
+            throw new Error(
+              loadResult.error
+              ?? `Failed to activate plugin ${existingPlugin.pluginKey}`,
+            );
+          }
+        }
         const updated = await registry.getById(existingPlugin.id);
         await logPluginMutationActivity(req, "plugin.installed", existingPlugin.id, {
           pluginId: existingPlugin.id,

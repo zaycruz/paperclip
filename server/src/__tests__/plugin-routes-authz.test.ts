@@ -51,6 +51,8 @@ async function createApp(
 
   const loader = {
     installPlugin: vi.fn(),
+    hasRuntimeServices: vi.fn().mockReturnValue(false),
+    loadSingle: vi.fn(),
     ...loaderOverrides,
   };
 
@@ -165,7 +167,11 @@ describe.sequential("plugin install and upgrade authz", () => {
         isInstanceAdmin: true,
         companyIds: [],
       },
-      { installPlugin: vi.fn().mockResolvedValue(discovered) },
+      {
+        installPlugin: vi.fn().mockResolvedValue(discovered),
+        hasRuntimeServices: vi.fn().mockReturnValue(true),
+        loadSingle: vi.fn().mockResolvedValue({ success: true }),
+      },
     );
 
     const res = await request(app)
@@ -178,6 +184,7 @@ describe.sequential("plugin install and upgrade authz", () => {
       version: undefined,
     });
     expect(mockLifecycle.load).toHaveBeenCalledWith(pluginId);
+    expect(loader.loadSingle).toHaveBeenCalledWith(pluginId);
   }, 20_000);
 
   it("rejects plugin upgrades for non-admin board users", async () => {

@@ -154,15 +154,27 @@ paths:
 - `/api/paperclip/agents/{container_id}/repair`
 
 On 2026-05-07, `https://api-staging.fleetos.raavasolutions.com` returned
-healthy/ready responses but was still `blocked` for this plugin because OpenAPI
-only exposed the Paperclip runtime proxy routes, not the six connector target
-routes above.
+healthy/ready responses and OpenAPI exposed all required connector target
+routes above. The live Cloud Run Paperclip deployment installed the baked plugin
+bundle and loaded it as `ready` in revision `paperclip-00022-sam`.
+
+The live connector was smoke-tested with the IJT Capital Paperclip company
+mapped to Monolith tenant `ijt-capital`. The stable Paperclip route
+`https://paperclip-lmbn6fkciq-ue.a.run.app` verified:
+
+- plugin config validation returned valid with only the expected anonymous-token
+  warning;
+- `GET /fleet/overview?companyId=d9375d0b-b255-48eb-ab2d-e9d57836431f`
+  returned `status=active`, `linkedAgents=1`, `degradedAgents=0`, and
+  `routineSummary.status=in_sync`;
+- persisted bridge data for `fleet-last-overview` returned the same IJT tenant
+  state;
+- the `refresh-fleet-overview` bridge action refreshed the IJT overview
+  successfully;
+- scheduled `poll-fleet-links` job runs were succeeding every 15 minutes.
 
 Remaining production hardening before calling this fully first-class:
 
-- install the image-baked plugin bundle into the live Cloud Run Paperclip
-  deployment and smoke-test it after a revision rollout;
-- smoke-test with a real tenant/company mapping and Monolith Fleet API endpoint;
 - add signed/HMAC Fleet API auth instead of relying only on bearer token headers;
 - map Monolith cost buckets to Paperclip issue/project/goal/run IDs;
 - live-smoke routine repair actions against a real routine-owning tenant;

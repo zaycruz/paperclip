@@ -29,8 +29,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 6904,
-      "sha256": "8398d55a5fc299672e53aa86fd9e17ca92e2c85405b642f4c3849c7580cb35eb"
+      "bytes": 7459,
+      "sha256": "a2e78717b2337eb594d366c3953c88e6ad60f203bc50703df251a169c598f31b"
     },
     {
       "path": "package-lock.json",
@@ -46,6 +46,21 @@
       "path": "paperclip-install-payload.json",
       "bytes": 94,
       "sha256": "9e1250988725025b44ce72ffbac6f2ae543fd5a626a0c16fca23d8da96637b85"
+    },
+    {
+      "path": "scripts/build-cloud-run-bundle.mjs",
+      "bytes": 5648,
+      "sha256": "fdfcffc7a4a6ffb3d67d65eecaaa0fbd0757967d5ac91ea4e0d70bbba7016859"
+    },
+    {
+      "path": "scripts/verify-fleet-api-target.mjs",
+      "bytes": 3378,
+      "sha256": "95b8f82c01eebdfcae739e169958c78cf2f07687994cdc3c50c81e0a69f5845c"
+    },
+    {
+      "path": "scripts/verify.mjs",
+      "bytes": 4203,
+      "sha256": "e01fce7db0db2b0fe776bc2ae4ca44382992200a3c5a88158325257851402c53"
     },
     {
       "path": "src/constants.js",
@@ -71,6 +86,11 @@
       "path": "src/worker.js",
       "bytes": 12177,
       "sha256": "c2845097b14c4a27c08dce96340edc74c7c2dae9cd29d65f7e53d108dbe3bf58"
+    },
+    {
+      "path": "tests/logic.test.mjs",
+      "bytes": 3122,
+      "sha256": "eb52eb287a23f85750e624f91e068d7f7db3677ccf711ebaddb4212cd03874e9"
     }
   ]
 }

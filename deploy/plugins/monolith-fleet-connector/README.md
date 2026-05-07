@@ -91,6 +91,11 @@ Instance config fields:
 - `enableRegisterActions`: defaults to `false`; enables registering an existing
   Fleet agent into Paperclip.
 - `enableCostSyncActions`: defaults to `false`; enables non-dry-run cost sync.
+- `enableBudgetAlerts`: defaults to `true`; writes Paperclip activity alerts
+  and metrics for active budget incidents, pending budget approvals, and high
+  utilization.
+- `budgetAlertUtilizationPercent`: defaults to `90`; utilization threshold for
+  warning alerts.
 - `enableScheduledCostSync`: defaults to `false`; enables the scheduled
   cost-sync job for configured company mappings.
 - `scheduledCostSyncApply`: defaults to `false`; keeps scheduled cost sync in
@@ -103,7 +108,8 @@ Instance config fields:
 
 - Dashboard widget: Fleet link status, liveness, cost, and routine drift summary.
 - Budget status: active Paperclip budget incidents and pending budget approvals
-  from the Fleet ops rollup.
+  from the Fleet ops rollup, plus deduplicated activity alerts when budget
+  incidents, pending approvals, or threshold utilization are present.
 - Sidebar panel/page: company-scoped overview and refresh action.
 - Agent detail tab: agent/container link context and guarded repair action.
 - API routes:
@@ -126,6 +132,9 @@ cost events requires `enableCostSyncActions: true` plus `dryRun: false`.
 Scheduled cost sync has a second guard: the hourly job skips unless
 `enableScheduledCostSync` is true, and scheduled apply requires
 `scheduledCostSyncApply: true` as well as the normal cost-apply flag.
+Budget alerts do not mutate Fleet state; they route rollup-derived incident
+state into Paperclip activity and metrics, deduplicated by company and alert
+fingerprint.
 
 ## Local Smoke Evidence
 
@@ -200,7 +209,8 @@ Remaining production hardening before calling this fully first-class:
 - bake and smoke-test the `scheduled-cost-sync` job in a hosted Paperclip Cloud
   Run revision;
 - add signed/HMAC Fleet API auth instead of relying only on bearer token headers;
-- route budget incidents into an operator alert channel;
+- live-smoke budget alert activity against a hosted Paperclip company with a
+  real budget incident or forced high-utilization rollup;
 - live-smoke routine repair actions against a real routine-owning tenant;
 - add audited pause/resume hooks only after authorization and rollback semantics
   are defined.

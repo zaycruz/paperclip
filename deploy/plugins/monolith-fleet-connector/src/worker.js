@@ -9,6 +9,7 @@ import {
 } from "./constants.js";
 import {
   authorizationHeaders,
+  buildBudgetAlertSignal,
   buildCostSyncPayload,
   buildFleetUrl,
   buildOverviewStatus,
@@ -39,6 +40,15 @@ function companyStateKey(companyId) {
     scopeId: companyId,
     namespace: STATE_NAMESPACE,
     stateKey: "last-overview",
+  };
+}
+
+function budgetAlertStateKey(companyId) {
+  return {
+    scopeKind: "company",
+    scopeId: companyId,
+    namespace: STATE_NAMESPACE,
+    stateKey: "last-budget-alert",
   };
 }
 
@@ -81,15 +91,81 @@ async function fleetRequest(ctx, config, path, options = {}) {
   return body;
 }
 
-async function writeFleetMetrics(ctx, tenantId, overview) {
+async function writeFleetMetrics(ctx, tenantId, overview, config) {
   const labels = {
     tenant_id: tenantId,
     status: overview.status,
   };
+  const budgetAlert = buildBudgetAlertSignal(overview.summary, config);
   await ctx.metrics.write("fleet.linked_agents", overview.summary.linkedAgents, labels);
   await ctx.metrics.write("fleet.degraded_agents", overview.summary.degradedAgents, labels);
   await ctx.metrics.write("fleet.routine_drift_items", overview.routineSummary.missing + overview.routineSummary.drift + overview.routineSummary.unmanaged, labels);
   await ctx.metrics.write("fleet.total_cost", overview.summary.totalCost, labels);
+  await ctx.metrics.write("fleet.budget_active_incidents", overview.summary.budgetActiveIncidents, labels);
+  await ctx.metrics.write("fleet.budget_pending_approvals", overview.summary.pendingBudgetApprovals, labels);
+  await ctx.metrics.write("fleet.budget_max_utilization_percent", overview.summary.budgetMaxUtilizationPercent, labels);
+  await ctx.metrics.write("fleet.budget_alert_active", budgetAlert ? 1 : 0, {
+    ...labels,
+    severity: budgetAlert?.severity || "none",
+  });
+}
+
+async function writeBudgetAlert(ctx, companyId, tenantId, overview, config) {
+  const alert = buildBudgetAlertSignal(overview.summary, config);
+  const key = budgetAlertStateKey(companyId);
+  const previous = await ctx.state.get(key);
+  const checkedAt = new Date().toISOString();
+
+  if (!alert) {
+    if (previous?.active) {
+      await ctx.activity.log({
+        companyId,
+        message: `Fleet budget alert cleared for tenant ${tenantId}`,
+        metadata: {
+          plugin: PLUGIN_ID,
+          tenantId,
+          previousSeverity: previous.severity,
+          previousFingerprint: previous.fingerprint,
+        },
+      });
+    }
+    await ctx.state.set(key, {
+      checkedAt,
+      tenantId,
+      active: false,
+      fingerprint: "",
+    });
+    return null;
+  }
+
+  const state = {
+    ...alert,
+    checkedAt,
+    tenantId,
+    active: true,
+  };
+  await ctx.state.set(key, state);
+  if (previous?.fingerprint !== alert.fingerprint) {
+    await ctx.activity.log({
+      companyId,
+      message: alert.message,
+      metadata: {
+        plugin: PLUGIN_ID,
+        tenantId,
+        severity: alert.severity,
+        activeIncidents: alert.activeIncidents,
+        pendingApprovals: alert.pendingApprovals,
+        maxUtilizationPercent: alert.maxUtilizationPercent,
+        thresholdPercent: alert.thresholdPercent,
+        reasons: alert.reasons,
+      },
+    });
+    await ctx.metrics.write("fleet.budget_alert_events", 1, {
+      tenant_id: tenantId,
+      severity: alert.severity,
+    });
+  }
+  return state;
 }
 
 async function loadOverview(ctx, companyId, options = {}) {
@@ -131,7 +207,8 @@ async function loadOverview(ctx, companyId, options = {}) {
   };
 
   await ctx.state.set(companyStateKey(companyId), overview);
-  await writeFleetMetrics(ctx, tenantId, overview);
+  await writeFleetMetrics(ctx, tenantId, overview, config);
+  await writeBudgetAlert(ctx, companyId, tenantId, overview, config);
   return overview;
 }
 

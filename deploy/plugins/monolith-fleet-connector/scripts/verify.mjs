@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import manifest from "../src/manifest.js";
 import {
+  buildBudgetAlertSignal,
   buildCostSyncPayload,
   buildFleetUrl,
   buildRegisterExistingPayload,
@@ -47,12 +48,16 @@ assert.ok(pageSlot, "page slot is required");
 assert.match(pageSlot.routePath, /^[a-z0-9-]+$/, "page routePath must be a lowercase single-segment slug");
 assert.ok(manifest.jobs.some((job) => job.jobKey === "poll-fleet-links"));
 assert.ok(manifest.jobs.some((job) => job.jobKey === "scheduled-cost-sync"));
+assert.equal(manifest.instanceConfigSchema.properties.fleetApiTokenSecretRef.format, "secret-ref");
+assert.equal(manifest.instanceConfigSchema.properties.enableBudgetAlerts.default, true);
+assert.equal(manifest.instanceConfigSchema.properties.budgetAlertUtilizationPercent.maximum, 100);
 
 const config = normalizeConfig({
   fleetApiBaseUrl: "https://fleet.example/api/",
   fleetApiTokenSecretRef: "secret://fleet-token",
   tenantIdByCompanyId: { "pc-co": "tenant-a", blank: " " },
   enableRegisterActions: "true",
+  budgetAlertUtilizationPercent: 95,
   enableScheduledCostSync: "true",
   scheduledCostSyncHours: 48,
 });
@@ -67,6 +72,8 @@ assert.deepEqual(redactConfig(config), {
   enableRegisterActions: true,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableBudgetAlerts: true,
+  budgetAlertUtilizationPercent: 95,
   enableScheduledCostSync: true,
   scheduledCostSyncApply: false,
   scheduledCostSyncHours: 48,
@@ -100,6 +107,20 @@ assert.deepEqual(buildCostSyncPayload({ apply: true, hours: 9999, force: "true" 
   force: true,
 });
 assert.deepEqual(buildScheduledCostSyncParams(config), { hours: 48, dryRun: true });
+assert.deepEqual(buildBudgetAlertSignal({
+  budgetActiveIncidents: 1,
+  pendingBudgetApprovals: 2,
+  budgetMaxUtilizationPercent: 99.8,
+}, config), {
+  severity: "critical",
+  activeIncidents: 1,
+  pendingApprovals: 2,
+  maxUtilizationPercent: 99.8,
+  thresholdPercent: 95,
+  reasons: ["1 active budget incident", "2 pending budget approvals", "99.8% max utilization"],
+  fingerprint: "critical:1:2:99.8:95",
+  message: "Fleet budget critical: 1 active budget incident, 2 pending budget approvals, 99.8% max utilization",
+});
 
 assert.deepEqual(
   summarizeOpsRollup({

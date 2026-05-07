@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCostSyncPayload,
+  buildBudgetAlertSignal,
   buildFleetUrl,
   buildOverviewStatus,
   buildRegisterExistingPayload,
@@ -19,6 +20,8 @@ test("normalizes connector config and clamps runtime windows", () => {
     fleetApiBaseUrl: "https://fleet.example///",
     tenantIdByCompanyId: { "company-1": "tenant-1", empty: "" },
     enableRepairActions: "false",
+    enableBudgetAlerts: "true",
+    budgetAlertUtilizationPercent: 999,
     enableScheduledCostSync: "true",
     scheduledCostSyncApply: "true",
     scheduledCostSyncHours: 9999,
@@ -26,6 +29,8 @@ test("normalizes connector config and clamps runtime windows", () => {
   assert.equal(config.fleetApiBaseUrl, "https://fleet.example");
   assert.deepEqual(config.tenantIdByCompanyId, { "company-1": "tenant-1" });
   assert.equal(config.enableRepairActions, false);
+  assert.equal(config.enableBudgetAlerts, true);
+  assert.equal(config.budgetAlertUtilizationPercent, 100);
   assert.equal(config.enableScheduledCostSync, true);
   assert.equal(config.scheduledCostSyncApply, true);
   assert.equal(config.scheduledCostSyncHours, 720);
@@ -85,6 +90,46 @@ test("maps plugin action params into Monolith REST payloads", () => {
   assert.deepEqual(
     buildScheduledCostSyncParams({ scheduledCostSyncApply: "false", scheduledCostSyncHours: 9999 }),
     { hours: 720, dryRun: true },
+  );
+});
+
+test("builds deduplicatable budget alert signals from rollup summaries", () => {
+  assert.equal(
+    buildBudgetAlertSignal(
+      { budgetActiveIncidents: 0, pendingBudgetApprovals: 0, budgetMaxUtilizationPercent: 50 },
+      { budgetAlertUtilizationPercent: 90 },
+    ),
+    null,
+  );
+  assert.equal(
+    buildBudgetAlertSignal(
+      { budgetActiveIncidents: 2, pendingBudgetApprovals: 1, budgetMaxUtilizationPercent: 97.255 },
+      { enableBudgetAlerts: false },
+    ),
+    null,
+  );
+  assert.deepEqual(
+    buildBudgetAlertSignal(
+      { budgetActiveIncidents: 0, pendingBudgetApprovals: 2, budgetMaxUtilizationPercent: 93.456 },
+      { budgetAlertUtilizationPercent: 90 },
+    ),
+    {
+      severity: "warning",
+      activeIncidents: 0,
+      pendingApprovals: 2,
+      maxUtilizationPercent: 93.46,
+      thresholdPercent: 90,
+      reasons: ["2 pending budget approvals", "93.46% max utilization"],
+      fingerprint: "warning:0:2:93.46:90",
+      message: "Fleet budget warning: 2 pending budget approvals, 93.46% max utilization",
+    },
+  );
+  assert.equal(
+    buildBudgetAlertSignal(
+      { budgetActiveIncidents: 1, pendingBudgetApprovals: 0, budgetMaxUtilizationPercent: 10 },
+      { budgetAlertUtilizationPercent: 90 },
+    )?.severity,
+    "critical",
   );
 });
 

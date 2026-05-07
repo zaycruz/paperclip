@@ -81,6 +81,19 @@ const manifest = {
         default: false,
         description: "Dry-run cost checks are always allowed; non-dry-run apply requires this flag.",
       },
+      enableBudgetAlerts: {
+        type: "boolean",
+        title: "Enable Budget Alerts",
+        default: true,
+        description: "Routes Fleet budget incidents, pending approvals, and high utilization into Paperclip activity and metrics.",
+      },
+      budgetAlertUtilizationPercent: {
+        type: "integer",
+        title: "Budget Alert Utilization Percent",
+        default: 90,
+        minimum: 1,
+        maximum: 100,
+      },
       enableScheduledCostSync: {
         type: "boolean",
         title: "Enable Scheduled Cost Sync",

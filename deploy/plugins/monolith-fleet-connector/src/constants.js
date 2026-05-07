@@ -52,6 +52,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   enableRegisterActions: false,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableBudgetAlerts: true,
+  budgetAlertUtilizationPercent: 90,
   enableScheduledCostSync: false,
   scheduledCostSyncApply: false,
   scheduledCostSyncHours: 24,

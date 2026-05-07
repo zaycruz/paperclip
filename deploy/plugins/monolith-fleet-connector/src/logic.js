@@ -39,6 +39,12 @@ export function clampHours(value, fallback = 24) {
   return Math.max(1, Math.min(MAX_HOURS, Math.trunc(parsed)));
 }
 
+export function clampPercent(value, fallback = 90) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(100, Math.trunc(parsed)));
+}
+
 export function normalizeConfig(raw = {}) {
   const source = isPlainObject(raw) ? raw : {};
   const tenantIdByCompanyId = {};
@@ -70,6 +76,14 @@ export function normalizeConfig(raw = {}) {
       source.enableCostSyncActions,
       DEFAULT_CONFIG.enableCostSyncActions,
     ),
+    enableBudgetAlerts: coerceBoolean(
+      source.enableBudgetAlerts,
+      DEFAULT_CONFIG.enableBudgetAlerts,
+    ),
+    budgetAlertUtilizationPercent: clampPercent(
+      source.budgetAlertUtilizationPercent,
+      DEFAULT_CONFIG.budgetAlertUtilizationPercent,
+    ),
     enableScheduledCostSync: coerceBoolean(
       source.enableScheduledCostSync,
       DEFAULT_CONFIG.enableScheduledCostSync,
@@ -95,6 +109,8 @@ export function redactConfig(rawConfig = {}) {
     enableRegisterActions: config.enableRegisterActions,
     enableRepairActions: config.enableRepairActions,
     enableCostSyncActions: config.enableCostSyncActions,
+    enableBudgetAlerts: config.enableBudgetAlerts,
+    budgetAlertUtilizationPercent: config.budgetAlertUtilizationPercent,
     enableScheduledCostSync: config.enableScheduledCostSync,
     scheduledCostSyncApply: config.scheduledCostSyncApply,
     scheduledCostSyncHours: config.scheduledCostSyncHours,
@@ -268,6 +284,43 @@ export function buildScheduledCostSyncParams(rawConfig = {}) {
   return {
     hours: config.scheduledCostSyncHours,
     dryRun: !config.scheduledCostSyncApply,
+  };
+}
+
+export function buildBudgetAlertSignal(rawSummary = {}, rawConfig = {}) {
+  const config = normalizeConfig(rawConfig);
+  if (!config.enableBudgetAlerts) return null;
+
+  const activeIncidents = numberValue(rawSummary.budgetActiveIncidents, 0);
+  const pendingApprovals = numberValue(rawSummary.pendingBudgetApprovals, 0);
+  const maxUtilizationPercent = numberValue(rawSummary.budgetMaxUtilizationPercent, 0);
+  const thresholdPercent = config.budgetAlertUtilizationPercent;
+  if (activeIncidents <= 0 && pendingApprovals <= 0 && maxUtilizationPercent < thresholdPercent) {
+    return null;
+  }
+
+  const utilization = Math.round(maxUtilizationPercent * 100) / 100;
+  const reasons = [];
+  if (activeIncidents > 0) {
+    reasons.push(`${activeIncidents} active budget incident${activeIncidents === 1 ? "" : "s"}`);
+  }
+  if (pendingApprovals > 0) {
+    reasons.push(`${pendingApprovals} pending budget approval${pendingApprovals === 1 ? "" : "s"}`);
+  }
+  if (maxUtilizationPercent >= thresholdPercent) {
+    reasons.push(`${utilization}% max utilization`);
+  }
+
+  const severity = activeIncidents > 0 ? "critical" : "warning";
+  return {
+    severity,
+    activeIncidents,
+    pendingApprovals,
+    maxUtilizationPercent: utilization,
+    thresholdPercent,
+    reasons,
+    fingerprint: `${severity}:${activeIncidents}:${pendingApprovals}:${utilization}:${thresholdPercent}`,
+    message: `Fleet budget ${severity}: ${reasons.join(", ")}`,
   };
 }
 

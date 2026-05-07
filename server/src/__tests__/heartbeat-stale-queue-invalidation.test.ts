@@ -696,4 +696,56 @@ describeEmbeddedPostgres("heartbeat stale queued-run invalidation", () => {
     expect(run?.errorCode).toBeNull();
     expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
   });
+
+  it("prioritizes manual on-demand invokes over older queued assignment backlog", async () => {
+    const { companyId, agentId } = await seedCompanyAndAgent();
+    const issueId = randomUUID();
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      title: "Backlogged task",
+      status: "in_progress",
+      priority: "critical",
+      assigneeAgentId: agentId,
+    });
+
+    const backlog = await seedQueuedRun({
+      companyId,
+      agentId,
+      issueId,
+      wakeReason: "issue_assigned",
+      invocationSource: "assignment",
+    });
+
+    const manualRun = await heartbeat.invoke(agentId, "on_demand", {}, "manual");
+    if (!manualRun) throw new Error("Expected manual on-demand run to be queued");
+
+    await waitForCondition(async () => {
+      const run = await db
+        .select({ status: heartbeatRuns.status })
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, manualRun.id))
+        .then((rows) => rows[0] ?? null);
+      return run?.status === "succeeded";
+    });
+
+    const [manual, older] = await Promise.all([
+      db
+        .select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode })
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, manualRun.id))
+        .then((rows) => rows[0] ?? null),
+      db
+        .select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode })
+        .from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, backlog.runId))
+        .then((rows) => rows[0] ?? null),
+    ]);
+
+    expect(manual?.status).toBe("succeeded");
+    expect(manual?.errorCode).toBeNull();
+    expect(older?.status).toBe("queued");
+    expect(older?.errorCode).toBeNull();
+    expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
+  });
 });

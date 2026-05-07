@@ -5129,6 +5129,18 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
   }
 
+  function queuedRunSourceRank(run: typeof heartbeatRuns.$inferSelect) {
+    if (isManualOnDemandRun(run)) return 0;
+    if (run.invocationSource === "on_demand") return 1;
+    return 2;
+  }
+
+  function isManualOnDemandRun(
+    run: Pick<typeof heartbeatRuns.$inferSelect, "invocationSource" | "triggerDetail">,
+  ) {
+    return run.invocationSource === "on_demand" && run.triggerDetail === "manual";
+  }
+
   async function listQueuedRunDependencyReadiness(
     companyId: string,
     queuedRuns: Array<typeof heartbeatRuns.$inferSelect>,
@@ -6029,7 +6041,10 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     }
   }
 
-  async function startNextQueuedRunForAgent(agentId: string) {
+  async function startNextQueuedRunForAgent(
+    agentId: string,
+    opts: { onlyManualOnDemand?: boolean } = {},
+  ) {
     return withAgentStartLock(agentId, async () => {
       const agent = await getAgent(agentId);
       if (!agent) return [];
@@ -6047,6 +6062,10 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         .where(and(eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.status, "queued")))
         .orderBy(asc(heartbeatRuns.createdAt));
       if (queuedRuns.length === 0) return [];
+      const candidateQueuedRuns = opts.onlyManualOnDemand
+        ? queuedRuns.filter(isManualOnDemandRun)
+        : queuedRuns;
+      if (candidateQueuedRuns.length === 0) return [];
 
       const dependencyReadiness = await listQueuedRunDependencyReadiness(agent.companyId, queuedRuns);
       const queuedIssueIds = [...new Set(
@@ -6067,7 +6086,11 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             : sql`false`,
         );
       const issueById = new Map(issueRows.map((row) => [row.id, row]));
-      const prioritizedRuns = [...queuedRuns].sort((left, right) => {
+      const prioritizedRuns = [...candidateQueuedRuns].sort((left, right) => {
+        const leftSourceRank = queuedRunSourceRank(left);
+        const rightSourceRank = queuedRunSourceRank(right);
+        if (leftSourceRank !== rightSourceRank) return leftSourceRank - rightSourceRank;
+
         const leftIssueId = readNonEmptyString(parseObject(left.contextSnapshot).issueId);
         const rightIssueId = readNonEmptyString(parseObject(right.contextSnapshot).issueId);
         const leftReadiness = leftIssueId ? dependencyReadiness.get(leftIssueId) : null;
@@ -7397,7 +7420,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           });
           await releaseRuntimeServicesForRun(run.id).catch(() => undefined);
           activeRunExecutions.delete(run.id);
-          await startNextQueuedRunForAgent(run.agentId);
+          await startNextQueuedRunForAgent(run.agentId, {
+            onlyManualOnDemand: isManualOnDemandRun(run),
+          });
         }
   }
 
@@ -8385,7 +8410,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
 
       if (outcome.kind === "deferred" || outcome.kind === "skipped") return null;
       if (outcome.kind === "coalesced") {
-        await startNextQueuedRunForAgent(agent.id);
+        await startNextQueuedRunForAgent(agent.id, {
+          onlyManualOnDemand: source === "on_demand" && triggerDetail === "manual",
+        });
         return outcome.run;
       }
 
@@ -8402,7 +8429,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         },
       });
 
-      await startNextQueuedRunForAgent(agent.id);
+      await startNextQueuedRunForAgent(agent.id, {
+        onlyManualOnDemand: isManualOnDemandRun(newRun),
+      });
       return newRun;
     }
 
@@ -8517,7 +8546,9 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       },
     });
 
-    await startNextQueuedRunForAgent(agent.id);
+    await startNextQueuedRunForAgent(agent.id, {
+      onlyManualOnDemand: isManualOnDemandRun(newRun),
+    });
 
     return newRun;
   }

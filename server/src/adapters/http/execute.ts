@@ -1,5 +1,30 @@
+import { createHmac } from "node:crypto";
 import type { AdapterExecutionContext, AdapterExecutionResult } from "../types.js";
 import { asString, asNumber, parseObject } from "../utils.js";
+
+function buildSignedHeaders(
+  config: Record<string, unknown>,
+  body: string,
+  runId: string,
+): Record<string, string> {
+  const hmacSecret = asString(config.hmacSecret, "");
+  if (!hmacSecret) return {};
+
+  const timestampHeader = asString(config.hmacTimestampHeader, "x-paperclip-timestamp");
+  const signatureHeader = asString(config.hmacSignatureHeader, "x-paperclip-signature");
+  const idempotencyHeader = asString(config.idempotencyHeader, "x-paperclip-idempotency-key");
+  const idempotencyKey = asString(config.idempotencyKey, runId);
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = createHmac("sha256", hmacSecret)
+    .update(`${timestamp}.${body}`)
+    .digest("hex");
+
+  return {
+    [timestampHeader]: timestamp,
+    [signatureHeader]: `sha256=${signature}`,
+    [idempotencyHeader]: idempotencyKey,
+  };
+}
 
 export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExecutionResult> {
   const { config, runId, agent, context } = ctx;
@@ -11,6 +36,8 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
   const headers = parseObject(config.headers) as Record<string, string>;
   const payloadTemplate = parseObject(config.payloadTemplate);
   const body = { ...payloadTemplate, agentId: agent.id, runId, context };
+  const bodyJson = JSON.stringify(body);
+  const signedHeaders = buildSignedHeaders(config, bodyJson, runId);
 
   const controller = new AbortController();
   const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -21,8 +48,9 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       headers: {
         "content-type": "application/json",
         ...headers,
+        ...signedHeaders,
       },
-      body: JSON.stringify(body),
+      body: bodyJson,
       ...(timer ? { signal: controller.signal } : {}),
     });
 

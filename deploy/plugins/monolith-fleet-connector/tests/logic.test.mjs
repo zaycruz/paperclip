@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import manifest from "../src/manifest.js";
 import {
   buildCostSyncPayload,
   buildFleetUrl,
@@ -12,6 +13,13 @@ import {
   summarizeOpsRollup,
   summarizeRoutineReconciliation,
 } from "../src/logic.js";
+
+test("marks Fleet token config as a secret-ref field", () => {
+  assert.equal(
+    manifest.instanceConfigSchema.properties.fleetApiTokenSecretRef.format,
+    "secret-ref",
+  );
+});
 
 test("normalizes connector config and clamps runtime windows", () => {
   const config = normalizeConfig({

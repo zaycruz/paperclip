@@ -74,8 +74,8 @@
     },
     {
       "path": "src/manifest.js",
-      "bytes": 4460,
-      "sha256": "51cff84b0dc44b307bc818677aa3c3a96f9389615f5ef02a1eafad1160935507"
+      "bytes": 4490,
+      "sha256": "8a45205b26ef4c09bef06bf7c4c3346bfdbd1a9aa2d12ddfea77dde5f213c48b"
     },
     {
       "path": "src/ui/index.js",
@@ -89,8 +89,8 @@
     },
     {
       "path": "tests/logic.test.mjs",
-      "bytes": 3122,
-      "sha256": "eb52eb287a23f85750e624f91e068d7f7db3677ccf711ebaddb4212cd03874e9"
+      "bytes": 3348,
+      "sha256": "380e89d6e95f083f74ee5ed185ad000e2937326acae53c34f7974de0cbec1372"
     }
   ]
 }

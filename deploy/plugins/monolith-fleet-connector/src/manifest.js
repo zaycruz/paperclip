@@ -49,6 +49,7 @@ const manifest = {
       },
       fleetApiTokenSecretRef: {
         type: "string",
+        format: "secret-ref",
         title: "Fleet API Token Secret Ref",
         description: "Paperclip secret reference containing the Fleet API bearer token.",
         default: "",

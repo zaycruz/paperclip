@@ -29,8 +29,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 7459,
-      "sha256": "a2e78717b2337eb594d366c3953c88e6ad60f203bc50703df251a169c598f31b"
+      "bytes": 7723,
+      "sha256": "47eb5d7bada018e1a3d387d208347c7dd3553f8b73bf28247d080fc87ad87710"
     },
     {
       "path": "package-lock.json",

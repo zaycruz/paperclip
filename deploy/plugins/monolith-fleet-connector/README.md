@@ -171,7 +171,11 @@ mapped to Monolith tenant `ijt-capital`. The stable Paperclip route
   state;
 - the `refresh-fleet-overview` bridge action refreshed the IJT overview
   successfully;
-- scheduled `poll-fleet-links` job runs were succeeding every 15 minutes.
+- scheduled `poll-fleet-links` job runs were succeeding every 15 minutes;
+- a Paperclip local-encrypted secret backed `fleetApiTokenSecretRef`, redacted
+  config showed `fleetApiTokenSecretRefConfigured=true`, and `POST
+  /fleet/sync-costs` dry-run reached Fleet API with `status=no_usage`,
+  `linked_agents=1`, and `candidate_events=0`.
 
 Remaining production hardening before calling this fully first-class:
 

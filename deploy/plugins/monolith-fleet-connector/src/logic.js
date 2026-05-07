@@ -70,6 +70,18 @@ export function normalizeConfig(raw = {}) {
       source.enableCostSyncActions,
       DEFAULT_CONFIG.enableCostSyncActions,
     ),
+    enableScheduledCostSync: coerceBoolean(
+      source.enableScheduledCostSync,
+      DEFAULT_CONFIG.enableScheduledCostSync,
+    ),
+    scheduledCostSyncApply: coerceBoolean(
+      source.scheduledCostSyncApply,
+      DEFAULT_CONFIG.scheduledCostSyncApply,
+    ),
+    scheduledCostSyncHours: clampHours(
+      source.scheduledCostSyncHours,
+      DEFAULT_CONFIG.scheduledCostSyncHours,
+    ),
   };
 }
 
@@ -83,6 +95,9 @@ export function redactConfig(rawConfig = {}) {
     enableRegisterActions: config.enableRegisterActions,
     enableRepairActions: config.enableRepairActions,
     enableCostSyncActions: config.enableCostSyncActions,
+    enableScheduledCostSync: config.enableScheduledCostSync,
+    scheduledCostSyncApply: config.scheduledCostSyncApply,
+    scheduledCostSyncHours: config.scheduledCostSyncHours,
   };
 }
 
@@ -245,6 +260,14 @@ export function buildCostSyncPayload(params = {}) {
     hours: clampHours(params.hours, 24),
     dry_run: dryRun,
     force: coerceBoolean(params.force, false),
+  };
+}
+
+export function buildScheduledCostSyncParams(rawConfig = {}) {
+  const config = normalizeConfig(rawConfig);
+  return {
+    hours: config.scheduledCostSyncHours,
+    dryRun: !config.scheduledCostSyncApply,
   };
 }
 

@@ -91,6 +91,13 @@ Instance config fields:
 - `enableRegisterActions`: defaults to `false`; enables registering an existing
   Fleet agent into Paperclip.
 - `enableCostSyncActions`: defaults to `false`; enables non-dry-run cost sync.
+- `enableScheduledCostSync`: defaults to `false`; enables the scheduled
+  cost-sync job for configured company mappings.
+- `scheduledCostSyncApply`: defaults to `false`; keeps scheduled cost sync in
+  dry-run mode unless explicitly enabled. Apply also requires
+  `enableCostSyncActions: true`.
+- `scheduledCostSyncHours`: defaults to `24`; controls the scheduled lookback
+  window.
 
 ## Surfaces
 
@@ -106,6 +113,9 @@ Instance config fields:
   - `POST /fleet/sync-costs`
 - Scheduled job: `poll-fleet-links` refreshes configured company mappings every
   15 minutes.
+- Scheduled job: `scheduled-cost-sync` runs hourly. It is disabled by default,
+  dry-runs by default when enabled, and applies only when both
+  `scheduledCostSyncApply` and `enableCostSyncActions` are true.
 
 ## Safety Model
 
@@ -113,6 +123,9 @@ The connector never stores a Fleet token in plugin state and redacts secret
 configuration from data responses. Mutating actions record Paperclip activity
 and metrics. Cost sync is dry-run by default at the action/API boundary; applying
 cost events requires `enableCostSyncActions: true` plus `dryRun: false`.
+Scheduled cost sync has a second guard: the hourly job skips unless
+`enableScheduledCostSync` is true, and scheduled apply requires
+`scheduledCostSyncApply: true` as well as the normal cost-apply flag.
 
 ## Local Smoke Evidence
 
@@ -174,13 +187,20 @@ mapped to Monolith tenant `ijt-capital`. The stable Paperclip route
 - scheduled `poll-fleet-links` job runs were succeeding every 15 minutes;
 - a Paperclip local-encrypted secret backed `fleetApiTokenSecretRef`, redacted
   config showed `fleetApiTokenSecretRefConfigured=true`, and `POST
-  /fleet/sync-costs` dry-run reached Fleet API with `status=no_usage`,
-  `linked_agents=1`, and `candidate_events=0`.
+  /fleet/sync-costs` dry-run reached Fleet API.
+
+On the same date, Fleet API PRs #146-#149 made live cost sync complete for the
+IJT mapping. A non-force apply through the connector posted the remaining
+three cost buckets with zero failures, moved hosted Paperclip spend from 626 to
+657 cents, and a follow-up dry-run returned `status=no_usage` with all 10
+known buckets already synced.
 
 Remaining production hardening before calling this fully first-class:
 
+- bake and smoke-test the `scheduled-cost-sync` job in a hosted Paperclip Cloud
+  Run revision;
 - add signed/HMAC Fleet API auth instead of relying only on bearer token headers;
-- map Monolith cost buckets to Paperclip issue/project/goal/run IDs;
+- route budget incidents into an operator alert channel;
 - live-smoke routine repair actions against a real routine-owning tenant;
 - add audited pause/resume hooks only after authorization and rollback semantics
   are defined.

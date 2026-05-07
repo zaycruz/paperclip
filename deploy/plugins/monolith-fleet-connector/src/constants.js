@@ -25,6 +25,7 @@ export const ACTION_KEYS = Object.freeze({
 
 export const JOB_KEYS = Object.freeze({
   pollFleetLinks: "poll-fleet-links",
+  scheduledCostSync: "scheduled-cost-sync",
 });
 
 export const SLOT_IDS = Object.freeze({
@@ -51,4 +52,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   enableRegisterActions: false,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableScheduledCostSync: false,
+  scheduledCostSyncApply: false,
+  scheduledCostSyncHours: 24,
 });

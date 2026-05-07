@@ -204,5 +204,8 @@ export function FleetConnectorSettings() {
     e(Metric, { label: "Repair", value: data?.enableRepairActions ? "enabled" : "disabled" }),
     e(Metric, { label: "Register", value: data?.enableRegisterActions ? "enabled" : "disabled" }),
     e(Metric, { label: "Cost apply", value: data?.enableCostSyncActions ? "enabled" : "disabled" }),
+    e(Metric, { label: "Scheduled cost sync", value: data?.enableScheduledCostSync ? "enabled" : "disabled" }),
+    e(Metric, { label: "Scheduled mode", value: data?.scheduledCostSyncApply ? "apply" : "dry-run" }),
+    e(Metric, { label: "Scheduled lookback", value: `${data?.scheduledCostSyncHours ?? 24}h` }),
   );
 }

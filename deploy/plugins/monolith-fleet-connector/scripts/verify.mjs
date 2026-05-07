@@ -5,6 +5,7 @@ import {
   buildFleetUrl,
   buildRegisterExistingPayload,
   buildRepairPayload,
+  buildScheduledCostSyncParams,
   normalizeConfig,
   redactConfig,
   resolveTenantId,
@@ -45,12 +46,15 @@ const pageSlot = manifest.ui.slots.find((slot) => slot.type === "page");
 assert.ok(pageSlot, "page slot is required");
 assert.match(pageSlot.routePath, /^[a-z0-9-]+$/, "page routePath must be a lowercase single-segment slug");
 assert.ok(manifest.jobs.some((job) => job.jobKey === "poll-fleet-links"));
+assert.ok(manifest.jobs.some((job) => job.jobKey === "scheduled-cost-sync"));
 
 const config = normalizeConfig({
   fleetApiBaseUrl: "https://fleet.example/api/",
   fleetApiTokenSecretRef: "secret://fleet-token",
   tenantIdByCompanyId: { "pc-co": "tenant-a", blank: " " },
   enableRegisterActions: "true",
+  enableScheduledCostSync: "true",
+  scheduledCostSyncHours: 48,
 });
 assert.equal(config.fleetApiBaseUrl, "https://fleet.example/api");
 assert.equal(resolveTenantId("pc-co", config), "tenant-a");
@@ -63,6 +67,9 @@ assert.deepEqual(redactConfig(config), {
   enableRegisterActions: true,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableScheduledCostSync: true,
+  scheduledCostSyncApply: false,
+  scheduledCostSyncHours: 48,
 });
 
 assert.deepEqual(
@@ -92,6 +99,7 @@ assert.deepEqual(buildCostSyncPayload({ apply: true, hours: 9999, force: "true" 
   dry_run: false,
   force: true,
 });
+assert.deepEqual(buildScheduledCostSyncParams(config), { hours: 48, dryRun: true });
 
 assert.deepEqual(
   summarizeOpsRollup({

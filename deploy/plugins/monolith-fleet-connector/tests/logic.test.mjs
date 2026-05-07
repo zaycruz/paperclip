@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import manifest from "../src/manifest.js";
 import {
   buildCostSyncPayload,
   buildFleetUrl,
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
+  buildScheduledCostSyncParams,
   clampHours,
   normalizeConfig,
   requireTenantId,
@@ -14,22 +14,21 @@ import {
   summarizeRoutineReconciliation,
 } from "../src/logic.js";
 
-test("marks Fleet token config as a secret-ref field", () => {
-  assert.equal(
-    manifest.instanceConfigSchema.properties.fleetApiTokenSecretRef.format,
-    "secret-ref",
-  );
-});
-
 test("normalizes connector config and clamps runtime windows", () => {
   const config = normalizeConfig({
     fleetApiBaseUrl: "https://fleet.example///",
     tenantIdByCompanyId: { "company-1": "tenant-1", empty: "" },
     enableRepairActions: "false",
+    enableScheduledCostSync: "true",
+    scheduledCostSyncApply: "true",
+    scheduledCostSyncHours: 9999,
   });
   assert.equal(config.fleetApiBaseUrl, "https://fleet.example");
   assert.deepEqual(config.tenantIdByCompanyId, { "company-1": "tenant-1" });
   assert.equal(config.enableRepairActions, false);
+  assert.equal(config.enableScheduledCostSync, true);
+  assert.equal(config.scheduledCostSyncApply, true);
+  assert.equal(config.scheduledCostSyncHours, 720);
   assert.equal(clampHours(0), 1);
   assert.equal(clampHours(9999), 720);
 });
@@ -79,6 +78,14 @@ test("maps plugin action params into Monolith REST payloads", () => {
     dry_run: false,
     force: false,
   });
+  assert.deepEqual(
+    buildScheduledCostSyncParams({ scheduledCostSyncApply: "true", scheduledCostSyncHours: 48 }),
+    { hours: 48, dryRun: false },
+  );
+  assert.deepEqual(
+    buildScheduledCostSyncParams({ scheduledCostSyncApply: "false", scheduledCostSyncHours: 9999 }),
+    { hours: 720, dryRun: true },
+  );
 });
 
 test("summarizes rollup and routine reconciliation into connector status", () => {

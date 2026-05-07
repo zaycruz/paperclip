@@ -106,9 +106,10 @@ async function build() {
   for (const filename of ["README.md", "package.json", "package-lock.json"]) {
     await copyFile(path.join(packageRoot, filename), path.join(outDir, filename));
   }
+  for (const dirname of ["scripts", "tests"]) {
+    await copyTree(path.join(packageRoot, dirname), path.join(outDir, dirname));
+  }
   await copyTree(path.join(packageRoot, "src"), path.join(outDir, "src"));
-  await copyTree(path.join(packageRoot, "scripts"), path.join(outDir, "scripts"));
-  await copyTree(path.join(packageRoot, "tests"), path.join(outDir, "tests"));
 
   const installPayload = {
     packageName: imagePath,

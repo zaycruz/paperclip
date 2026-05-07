@@ -14,6 +14,7 @@ import {
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
+  buildScheduledCostSyncParams,
   clampHours,
   normalizeConfig,
   redactConfig,
@@ -222,6 +223,68 @@ async function syncCosts(ctx, params = {}) {
   return result;
 }
 
+async function runScheduledCostSync(ctx, job = {}) {
+  const config = await getConfig(ctx);
+  const companyIds = Object.keys(config.tenantIdByCompanyId);
+  const scheduledParams = buildScheduledCostSyncParams(config);
+  const results = [];
+
+  if (!config.enableScheduledCostSync) {
+    const jobState = {
+      checkedAt: new Date().toISOString(),
+      runId: job.runId,
+      trigger: job.trigger,
+      enabled: false,
+      configuredCompanies: companyIds.length,
+      failures: 0,
+      results,
+    };
+    await ctx.state.set({ scopeKind: "instance", namespace: STATE_NAMESPACE, stateKey: "last-cost-sync" }, jobState);
+    await ctx.metrics.write("fleet.cost_sync_job_runs", 1, {
+      trigger: job.trigger,
+      enabled: "false",
+      apply: "false",
+      failures: "0",
+    });
+    return jobState;
+  }
+
+  for (const companyId of companyIds) {
+    try {
+      results.push({
+        companyId,
+        status: "ok",
+        result: await syncCosts(ctx, {
+          companyId,
+          ...scheduledParams,
+        }),
+      });
+    } catch (error) {
+      results.push({ companyId, status: "error", error: errorMessage(error) });
+    }
+  }
+
+  const jobState = {
+    checkedAt: new Date().toISOString(),
+    runId: job.runId,
+    trigger: job.trigger,
+    enabled: true,
+    dryRun: scheduledParams.dryRun,
+    hours: scheduledParams.hours,
+    configuredCompanies: companyIds.length,
+    failures: results.filter((entry) => entry.status === "error").length,
+    results,
+  };
+  await ctx.state.set({ scopeKind: "instance", namespace: STATE_NAMESPACE, stateKey: "last-cost-sync" }, jobState);
+  await ctx.metrics.write("fleet.cost_sync_job_runs", 1, {
+    trigger: job.trigger,
+    enabled: "true",
+    apply: String(!scheduledParams.dryRun),
+    failures: String(jobState.failures),
+  });
+  return jobState;
+}
+
 const plugin = definePlugin({
   async setup(ctx) {
     currentContext = ctx;
@@ -287,6 +350,8 @@ const plugin = definePlugin({
       });
       return jobState;
     });
+
+    ctx.jobs.register(JOB_KEYS.scheduledCostSync, async (job) => runScheduledCostSync(ctx, job));
   },
 
   async onApiRequest(input) {
@@ -321,7 +386,7 @@ const plugin = definePlugin({
       message: "Monolith Fleet Connector worker is running",
       details: {
         pluginId: PLUGIN_ID,
-        surfaces: ["dashboard-widget", "sidebar-panel", "agent-detail-tab", "fleet-api-routes", "scheduled-poll"],
+        surfaces: ["dashboard-widget", "sidebar-panel", "agent-detail-tab", "fleet-api-routes", "scheduled-poll", "scheduled-cost-sync"],
       },
     };
   },
@@ -334,6 +399,9 @@ const plugin = definePlugin({
     if (!normalized.fleetApiTokenSecretRef) warnings.push("No Fleet API token secret is configured; requests will be anonymous.");
     if (Object.keys(normalized.tenantIdByCompanyId).length === 0 && !normalized.defaultTenantId) {
       warnings.push("No company-to-tenant mapping is configured.");
+    }
+    if (normalized.scheduledCostSyncApply && !normalized.enableCostSyncActions) {
+      warnings.push("Scheduled cost sync apply also requires enableCostSyncActions.");
     }
     return { ok: errors.length === 0, errors, warnings };
   },

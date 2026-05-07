@@ -12,6 +12,8 @@
   },
   "files": [
     "README.md",
+    "scripts/",
+    "tests/",
     "src/"
   ],
   "exports": {

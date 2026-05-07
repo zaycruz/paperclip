@@ -81,6 +81,25 @@ const manifest = {
         default: false,
         description: "Dry-run cost checks are always allowed; non-dry-run apply requires this flag.",
       },
+      enableScheduledCostSync: {
+        type: "boolean",
+        title: "Enable Scheduled Cost Sync",
+        default: false,
+        description: "Runs the scheduled cost-sync job for configured company mappings. Disabled by default.",
+      },
+      scheduledCostSyncApply: {
+        type: "boolean",
+        title: "Scheduled Cost Sync Apply",
+        default: false,
+        description: "When false, the scheduled job dry-runs only. Applying also requires Enable Cost Sync Apply.",
+      },
+      scheduledCostSyncHours: {
+        type: "integer",
+        title: "Scheduled Cost Sync Lookback Hours",
+        default: 24,
+        minimum: 1,
+        maximum: 720,
+      },
     },
   },
   jobs: [
@@ -89,6 +108,12 @@ const manifest = {
       displayName: "Poll Fleet Links",
       description: "Refreshes Fleet health and routine reconciliation state for configured company mappings.",
       schedule: "*/15 * * * *",
+    },
+    {
+      jobKey: JOB_KEYS.scheduledCostSync,
+      displayName: "Scheduled Cost Sync",
+      description: "Dry-runs or applies Fleet cost sync for configured company mappings when enabled.",
+      schedule: "0 * * * *",
     },
   ],
   apiRoutes: [

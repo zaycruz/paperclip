@@ -29,8 +29,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 7723,
-      "sha256": "47eb5d7bada018e1a3d387d208347c7dd3553f8b73bf28247d080fc87ad87710"
+      "bytes": 8866,
+      "sha256": "0b9e08411c8997ea9a63c10428e50d313aa22c6d2d0874dcb4bc74499bf040aa"
     },
     {
       "path": "package-lock.json",
@@ -39,8 +39,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 1002,
-      "sha256": "fede81fa7acfb9487a37c7b9512e242f5654d8ae1a335efceaf2e9cc637e4419"
+      "bytes": 1032,
+      "sha256": "08eead8cffc905ceeac948d38867fae091756ff7ba40744faca2d1f2b47ae126"
     },
     {
       "path": "paperclip-install-payload.json",
@@ -49,8 +49,8 @@
     },
     {
       "path": "scripts/build-cloud-run-bundle.mjs",
-      "bytes": 5648,
-      "sha256": "fdfcffc7a4a6ffb3d67d65eecaaa0fbd0757967d5ac91ea4e0d70bbba7016859"
+      "bytes": 5619,
+      "sha256": "ac72e3cebe924e7ec174ec8d88950e41625a8fa5f05a4adb353d1b47e427739b"
     },
     {
       "path": "scripts/verify-fleet-api-target.mjs",
@@ -59,38 +59,38 @@
     },
     {
       "path": "scripts/verify.mjs",
-      "bytes": 4203,
-      "sha256": "e01fce7db0db2b0fe776bc2ae4ca44382992200a3c5a88158325257851402c53"
+      "bytes": 4559,
+      "sha256": "a80c9e182fef58afe08a7424a1d1749c8186806c4969a6e60ca49869d4d0b27d"
     },
     {
       "path": "src/constants.js",
-      "bytes": 1555,
-      "sha256": "cf41acace8a4aff788e19d9cdc64cc257b935137f74772176d8a840708ab80ba"
+      "bytes": 1696,
+      "sha256": "394b0f2f26248ad2a0c5d022ad70a7b18e35095580e56c78d0251a88988afb7c"
     },
     {
       "path": "src/logic.js",
-      "bytes": 8991,
-      "sha256": "4be00bf961581d9ab9e7fae6538edc31f6ef6f28b67f6e4968e78ceffedc12a9"
+      "bytes": 9779,
+      "sha256": "44a146042bbed28ccbf76fd8e8bdc5bac62098e9dd01bf35210d8d7f3265cc73"
     },
     {
       "path": "src/manifest.js",
-      "bytes": 4490,
-      "sha256": "8a45205b26ef4c09bef06bf7c4c3346bfdbd1a9aa2d12ddfea77dde5f213c48b"
+      "bytes": 5399,
+      "sha256": "f8329a87815c068bfd38fbc1d0a1cdcfb5ae5b792ec6851811d302b152ea1ca7"
     },
     {
       "path": "src/ui/index.js",
-      "bytes": 6947,
-      "sha256": "68e87972061a3f16ce5a9ca90d7db1c8d58eb406ce63857f7aabf4226fa6808c"
+      "bytes": 7259,
+      "sha256": "4beceedef1d6d8d5a101b8b3928a9d27249864523208a13c4fe2b4cbc2a0ee78"
     },
     {
       "path": "src/worker.js",
-      "bytes": 12177,
-      "sha256": "c2845097b14c4a27c08dce96340edc74c7c2dae9cd29d65f7e53d108dbe3bf58"
+      "bytes": 14330,
+      "sha256": "49e38cd0c9b860670e589eddcccef036c2f60042c1c1d74a05de2a98a68e3ac1"
     },
     {
       "path": "tests/logic.test.mjs",
-      "bytes": 3348,
-      "sha256": "380e89d6e95f083f74ee5ed185ad000e2937326acae53c34f7974de0cbec1372"
+      "bytes": 3737,
+      "sha256": "fd4be3fd586c0837bada9c316dc3408045b3f6b5f8a454cd2000cc3a4b6d5c46"
     }
   ]
 }

@@ -1,0 +1,165 @@
+import {
+  EXPORT_NAMES,
+  JOB_KEYS,
+  PAGE_ROUTE,
+  PLUGIN_ID,
+  PLUGIN_VERSION,
+  ROUTE_KEYS,
+  SLOT_IDS,
+} from "./constants.js";
+
+const manifest = {
+  id: PLUGIN_ID,
+  apiVersion: 1,
+  version: PLUGIN_VERSION,
+  displayName: "Monolith Fleet Connector",
+  description: "Connects Paperclip companies and agents to Monolith Fleet API health, repair, routine reconciliation, and cost-sync operations.",
+  author: "Raava",
+  categories: ["connector", "automation", "ui"],
+  capabilities: [
+    "companies.read",
+    "agents.read",
+    "activity.log.write",
+    "metrics.write",
+    "plugin.state.read",
+    "plugin.state.write",
+    "jobs.schedule",
+    "api.routes.register",
+    "http.outbound",
+    "secrets.read-ref",
+    "instance.settings.register",
+    "ui.sidebar.register",
+    "ui.page.register",
+    "ui.detailTab.register",
+    "ui.dashboardWidget.register",
+    "ui.action.register",
+  ],
+  entrypoints: {
+    worker: "./src/worker.js",
+    ui: "./src/ui",
+  },
+  instanceConfigSchema: {
+    type: "object",
+    properties: {
+      fleetApiBaseUrl: {
+        type: "string",
+        title: "Fleet API Base URL",
+        description: "Fleet API origin, for example https://api.fleetos.raavasolutions.com.",
+        default: "",
+      },
+      fleetApiTokenSecretRef: {
+        type: "string",
+        title: "Fleet API Token Secret Ref",
+        description: "Paperclip secret reference containing the Fleet API bearer token.",
+        default: "",
+      },
+      tenantIdByCompanyId: {
+        type: "object",
+        title: "Tenant IDs by Paperclip Company ID",
+        additionalProperties: { type: "string" },
+        default: {},
+      },
+      defaultTenantId: {
+        type: "string",
+        title: "Default Monolith Tenant ID",
+        default: "",
+      },
+      enableRepairActions: {
+        type: "boolean",
+        title: "Enable Repair Actions",
+        default: true,
+      },
+      enableRegisterActions: {
+        type: "boolean",
+        title: "Enable Register Existing Agent Actions",
+        default: false,
+      },
+      enableCostSyncActions: {
+        type: "boolean",
+        title: "Enable Cost Sync Apply",
+        default: false,
+        description: "Dry-run cost checks are always allowed; non-dry-run apply requires this flag.",
+      },
+    },
+  },
+  jobs: [
+    {
+      jobKey: JOB_KEYS.pollFleetLinks,
+      displayName: "Poll Fleet Links",
+      description: "Refreshes Fleet health and routine reconciliation state for configured company mappings.",
+      schedule: "*/15 * * * *",
+    },
+  ],
+  apiRoutes: [
+    {
+      routeKey: ROUTE_KEYS.overview,
+      method: "GET",
+      path: "/fleet/overview",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "query", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.registerExisting,
+      method: "POST",
+      path: "/fleet/register-existing",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.repairLink,
+      method: "POST",
+      path: "/fleet/repair-link",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.syncCosts,
+      method: "POST",
+      path: "/fleet/sync-costs",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+  ],
+  ui: {
+    slots: [
+      {
+        type: "dashboardWidget",
+        id: SLOT_IDS.dashboardWidget,
+        displayName: "Fleet Health",
+        exportName: EXPORT_NAMES.dashboardWidget,
+      },
+      {
+        type: "sidebarPanel",
+        id: SLOT_IDS.sidebarPanel,
+        displayName: "Fleet Connector",
+        exportName: EXPORT_NAMES.sidebarPanel,
+      },
+      {
+        type: "page",
+        id: SLOT_IDS.page,
+        displayName: "Fleet Connector",
+        exportName: EXPORT_NAMES.page,
+        routePath: PAGE_ROUTE,
+      },
+      {
+        type: "detailTab",
+        id: SLOT_IDS.agentTab,
+        displayName: "Fleet",
+        exportName: EXPORT_NAMES.agentTab,
+        entityTypes: ["agent"],
+      },
+      {
+        type: "settingsPage",
+        id: SLOT_IDS.settingsPage,
+        displayName: "Fleet Connector",
+        exportName: EXPORT_NAMES.settingsPage,
+      },
+    ],
+  },
+};
+
+export default manifest;

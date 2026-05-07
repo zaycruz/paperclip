@@ -4,6 +4,7 @@ import {
   buildBudgetAlertSignal,
   buildCostSyncPayload,
   buildFleetUrl,
+  buildLifecycleActionParams,
   buildRegisterExistingPayload,
   buildRepairPayload,
   buildScheduledCostSyncParams,
@@ -39,7 +40,7 @@ assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
 for (const capability of manifest.capabilities) {
   assert.ok(supportedCapabilities.has(capability), `unexpected capability ${capability}`);
 }
-assert.equal(manifest.apiRoutes.length, 4);
+assert.equal(manifest.apiRoutes.length, 5);
 assert.ok(manifest.apiRoutes.every((route) => route.capability === "api.routes.register"));
 assert.ok(manifest.ui.slots.some((slot) => slot.type === "dashboardWidget"));
 assert.ok(manifest.ui.slots.some((slot) => slot.type === "detailTab" && slot.entityTypes.includes("agent")));
@@ -57,6 +58,7 @@ const config = normalizeConfig({
   fleetApiTokenSecretRef: "secret://fleet-token",
   tenantIdByCompanyId: { "pc-co": "tenant-a", blank: " " },
   enableRegisterActions: "true",
+  enableLifecycleActions: "true",
   budgetAlertUtilizationPercent: 95,
   enableScheduledCostSync: "true",
   scheduledCostSyncHours: 48,
@@ -72,6 +74,8 @@ assert.deepEqual(redactConfig(config), {
   enableRegisterActions: true,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableLifecycleActions: true,
+  lifecycleRequireApprovalRef: true,
   enableBudgetAlerts: true,
   budgetAlertUtilizationPercent: 95,
   enableScheduledCostSync: true,
@@ -101,6 +105,10 @@ assert.deepEqual(buildRepairPayload({ adapterUrl: "https://adapter", provisionJo
   adapter_url: "https://adapter",
   provision_job_id: "job-1",
 });
+assert.deepEqual(
+  buildLifecycleActionParams({ operation: "pause", changeRequestId: "cr-1", reason: "budget hard stop" }, config),
+  { operation: "pause", approvalRef: "cr-1", reason: "budget hard stop" },
+);
 assert.deepEqual(buildCostSyncPayload({ apply: true, hours: 9999, force: "true" }), {
   hours: 720,
   dry_run: false,

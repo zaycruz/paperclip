@@ -81,6 +81,18 @@ const manifest = {
         default: false,
         description: "Dry-run cost checks are always allowed; non-dry-run apply requires this flag.",
       },
+      enableLifecycleActions: {
+        type: "boolean",
+        title: "Enable Pause/Resume Actions",
+        default: false,
+        description: "Allows audited Paperclip requests to pause or resume linked Fleet containers. Disabled by default.",
+      },
+      lifecycleRequireApprovalRef: {
+        type: "boolean",
+        title: "Require Pause/Resume Approval Ref",
+        default: true,
+        description: "Requires lifecycle requests to include a Paperclip approval or Monolith change request reference.",
+      },
       enableBudgetAlerts: {
         type: "boolean",
         title: "Enable Budget Alerts",
@@ -158,6 +170,14 @@ const manifest = {
       routeKey: ROUTE_KEYS.syncCosts,
       method: "POST",
       path: "/fleet/sync-costs",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.lifecycle,
+      method: "POST",
+      path: "/fleet/lifecycle",
       auth: "board-or-agent",
       capability: "api.routes.register",
       companyResolution: { from: "body", key: "companyId" },

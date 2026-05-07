@@ -12,6 +12,7 @@ import {
   buildBudgetAlertSignal,
   buildCostSyncPayload,
   buildFleetUrl,
+  buildLifecycleActionParams,
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
@@ -300,6 +301,61 @@ async function syncCosts(ctx, params = {}) {
   return result;
 }
 
+async function requestLifecycle(ctx, params = {}) {
+  const companyId = stringField(params.companyId);
+  const containerId = stringField(params.containerId);
+  if (!companyId || !containerId) {
+    throw new Error("companyId and containerId are required");
+  }
+
+  const config = await getConfig(ctx);
+  if (!config.enableLifecycleActions) {
+    throw new Error("Lifecycle actions are disabled in plugin settings");
+  }
+  const tenantId = requireTenantId(companyId, config);
+  const action = buildLifecycleActionParams(params, config);
+  const overview = await loadOverview(ctx, companyId);
+  const linkedAgent = Array.isArray(overview.rollup?.agents)
+    ? overview.rollup.agents.find((agent) => agent?.container_id === containerId || agent?.containerId === containerId)
+    : null;
+  if (!linkedAgent) {
+    throw new Error(`Container ${containerId} is not linked to Paperclip company ${companyId}`);
+  }
+
+  const result = await fleetRequest(
+    ctx,
+    config,
+    `/api/containers/${encodeURIComponent(containerId)}/${action.operation}`,
+    { method: "POST", query: { async: "true" } },
+  );
+  await ctx.activity.log({
+    companyId,
+    entityType: "agent",
+    entityId: linkedAgent.paperclip_agent_id || linkedAgent.paperclipAgentId || undefined,
+    message: `Requested Fleet ${action.operation} for ${containerId} through Monolith Fleet Connector`,
+    metadata: {
+      plugin: PLUGIN_ID,
+      containerId,
+      tenantId,
+      operation: action.operation,
+      approvalRef: action.approvalRef,
+      reason: action.reason,
+      fleetOperationId: result?.operation_id,
+    },
+  });
+  await ctx.metrics.write("fleet.lifecycle_requests", 1, {
+    tenant_id: tenantId,
+    operation: action.operation,
+  });
+  return {
+    operation: action.operation,
+    approvalRef: action.approvalRef,
+    containerId,
+    tenantId,
+    result,
+  };
+}
+
 async function runScheduledCostSync(ctx, job = {}) {
   const config = await getConfig(ctx);
   const companyIds = Object.keys(config.tenantIdByCompanyId);
@@ -400,6 +456,7 @@ const plugin = definePlugin({
     ctx.actions.register(ACTION_KEYS.registerExisting, async (params) => registerExistingAgent(ctx, params));
     ctx.actions.register(ACTION_KEYS.repairLink, async (params) => repairAgentLink(ctx, params));
     ctx.actions.register(ACTION_KEYS.syncCosts, async (params) => syncCosts(ctx, params));
+    ctx.actions.register(ACTION_KEYS.lifecycle, async (params) => requestLifecycle(ctx, params));
 
     ctx.jobs.register(JOB_KEYS.pollFleetLinks, async (job) => {
       const config = await getConfig(ctx);
@@ -453,6 +510,9 @@ const plugin = definePlugin({
     if (input.routeKey === ROUTE_KEYS.syncCosts) {
       return { body: await syncCosts(currentContext, { ...body, companyId }) };
     }
+    if (input.routeKey === ROUTE_KEYS.lifecycle) {
+      return { body: await requestLifecycle(currentContext, { ...body, companyId }) };
+    }
 
     return { status: 404, body: { error: `Unknown Fleet Connector route: ${input.routeKey}` } };
   },
@@ -479,6 +539,9 @@ const plugin = definePlugin({
     }
     if (normalized.scheduledCostSyncApply && !normalized.enableCostSyncActions) {
       warnings.push("Scheduled cost sync apply also requires enableCostSyncActions.");
+    }
+    if (normalized.enableLifecycleActions && !normalized.lifecycleRequireApprovalRef) {
+      warnings.push("Lifecycle actions can run without approval refs. Use only for trusted local smoke.");
     }
     return { ok: errors.length === 0, errors, warnings };
   },

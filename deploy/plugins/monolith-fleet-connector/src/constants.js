@@ -8,6 +8,7 @@ export const ROUTE_KEYS = Object.freeze({
   registerExisting: "fleet-register-existing",
   repairLink: "fleet-repair-link",
   syncCosts: "fleet-sync-costs",
+  lifecycle: "fleet-lifecycle",
 });
 
 export const DATA_KEYS = Object.freeze({
@@ -21,6 +22,7 @@ export const ACTION_KEYS = Object.freeze({
   registerExisting: "register-existing-fleet-agent",
   repairLink: "repair-fleet-agent-link",
   syncCosts: "sync-fleet-costs",
+  lifecycle: "request-fleet-lifecycle",
 });
 
 export const JOB_KEYS = Object.freeze({
@@ -52,6 +54,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   enableRegisterActions: false,
   enableRepairActions: true,
   enableCostSyncActions: false,
+  enableLifecycleActions: false,
+  lifecycleRequireApprovalRef: true,
   enableBudgetAlerts: true,
   budgetAlertUtilizationPercent: 90,
   enableScheduledCostSync: false,

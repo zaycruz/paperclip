@@ -205,6 +205,8 @@ export function FleetConnectorSettings() {
     e(Metric, { label: "Repair", value: data?.enableRepairActions ? "enabled" : "disabled" }),
     e(Metric, { label: "Register", value: data?.enableRegisterActions ? "enabled" : "disabled" }),
     e(Metric, { label: "Cost apply", value: data?.enableCostSyncActions ? "enabled" : "disabled" }),
+    e(Metric, { label: "Pause/resume", value: data?.enableLifecycleActions ? "enabled" : "disabled" }),
+    e(Metric, { label: "Lifecycle approval", value: data?.lifecycleRequireApprovalRef ? "required" : "not required" }),
     e(Metric, { label: "Budget alerts", value: data?.enableBudgetAlerts ? "enabled" : "disabled" }),
     e(Metric, { label: "Budget threshold", value: `${data?.budgetAlertUtilizationPercent ?? 90}%` }),
     e(Metric, { label: "Scheduled cost sync", value: data?.enableScheduledCostSync ? "enabled" : "disabled" }),

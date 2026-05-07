@@ -4,6 +4,7 @@ import {
   buildCostSyncPayload,
   buildBudgetAlertSignal,
   buildFleetUrl,
+  buildLifecycleActionParams,
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
@@ -20,6 +21,8 @@ test("normalizes connector config and clamps runtime windows", () => {
     fleetApiBaseUrl: "https://fleet.example///",
     tenantIdByCompanyId: { "company-1": "tenant-1", empty: "" },
     enableRepairActions: "false",
+    enableLifecycleActions: "true",
+    lifecycleRequireApprovalRef: "false",
     enableBudgetAlerts: "true",
     budgetAlertUtilizationPercent: 999,
     enableScheduledCostSync: "true",
@@ -29,6 +32,8 @@ test("normalizes connector config and clamps runtime windows", () => {
   assert.equal(config.fleetApiBaseUrl, "https://fleet.example");
   assert.deepEqual(config.tenantIdByCompanyId, { "company-1": "tenant-1" });
   assert.equal(config.enableRepairActions, false);
+  assert.equal(config.enableLifecycleActions, true);
+  assert.equal(config.lifecycleRequireApprovalRef, false);
   assert.equal(config.enableBudgetAlerts, true);
   assert.equal(config.budgetAlertUtilizationPercent, 100);
   assert.equal(config.enableScheduledCostSync, true);
@@ -90,6 +95,28 @@ test("maps plugin action params into Monolith REST payloads", () => {
   assert.deepEqual(
     buildScheduledCostSyncParams({ scheduledCostSyncApply: "false", scheduledCostSyncHours: 9999 }),
     { hours: 720, dryRun: true },
+  );
+});
+
+test("builds guarded lifecycle action params", () => {
+  assert.deepEqual(
+    buildLifecycleActionParams(
+      { operation: "pause", approvalRef: "approval-1", reason: "budget hard stop" },
+      { lifecycleRequireApprovalRef: true },
+    ),
+    { operation: "pause", approvalRef: "approval-1", reason: "budget hard stop" },
+  );
+  assert.deepEqual(
+    buildLifecycleActionParams({ action: "resume" }, { lifecycleRequireApprovalRef: false }),
+    { operation: "resume", approvalRef: "", reason: "" },
+  );
+  assert.throws(
+    () => buildLifecycleActionParams({ operation: "restart" }, { lifecycleRequireApprovalRef: false }),
+    /pause' or 'resume/,
+  );
+  assert.throws(
+    () => buildLifecycleActionParams({ operation: "pause" }, { lifecycleRequireApprovalRef: true }),
+    /approvalRef/,
   );
 });
 

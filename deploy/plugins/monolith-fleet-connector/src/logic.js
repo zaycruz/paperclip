@@ -76,6 +76,14 @@ export function normalizeConfig(raw = {}) {
       source.enableCostSyncActions,
       DEFAULT_CONFIG.enableCostSyncActions,
     ),
+    enableLifecycleActions: coerceBoolean(
+      source.enableLifecycleActions,
+      DEFAULT_CONFIG.enableLifecycleActions,
+    ),
+    lifecycleRequireApprovalRef: coerceBoolean(
+      source.lifecycleRequireApprovalRef,
+      DEFAULT_CONFIG.lifecycleRequireApprovalRef,
+    ),
     enableBudgetAlerts: coerceBoolean(
       source.enableBudgetAlerts,
       DEFAULT_CONFIG.enableBudgetAlerts,
@@ -109,6 +117,8 @@ export function redactConfig(rawConfig = {}) {
     enableRegisterActions: config.enableRegisterActions,
     enableRepairActions: config.enableRepairActions,
     enableCostSyncActions: config.enableCostSyncActions,
+    enableLifecycleActions: config.enableLifecycleActions,
+    lifecycleRequireApprovalRef: config.lifecycleRequireApprovalRef,
     enableBudgetAlerts: config.enableBudgetAlerts,
     budgetAlertUtilizationPercent: config.budgetAlertUtilizationPercent,
     enableScheduledCostSync: config.enableScheduledCostSync,
@@ -266,6 +276,31 @@ export function buildRepairPayload(params = {}) {
   if (adapterUrl) payload.adapter_url = adapterUrl;
   if (provisionJobId) payload.provision_job_id = provisionJobId;
   return payload;
+}
+
+export function buildLifecycleActionParams(params = {}, rawConfig = {}) {
+  const config = normalizeConfig(rawConfig);
+  const operation = firstString(params, "operation", "action").toLowerCase();
+  if (!["pause", "resume"].includes(operation)) {
+    throw new Error("Lifecycle operation must be 'pause' or 'resume'");
+  }
+  const approvalRef = firstString(
+    params,
+    "approval_ref",
+    "approvalRef",
+    "approval_id",
+    "approvalId",
+    "change_request_id",
+    "changeRequestId",
+  );
+  if (config.lifecycleRequireApprovalRef && !approvalRef) {
+    throw new Error("Lifecycle approvalRef or changeRequestId is required by plugin settings");
+  }
+  return {
+    operation,
+    approvalRef,
+    reason: firstString(params, "reason"),
+  };
 }
 
 export function buildCostSyncPayload(params = {}) {

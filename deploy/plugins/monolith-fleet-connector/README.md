@@ -91,6 +91,10 @@ Instance config fields:
 - `enableRegisterActions`: defaults to `false`; enables registering an existing
   Fleet agent into Paperclip.
 - `enableCostSyncActions`: defaults to `false`; enables non-dry-run cost sync.
+- `enableLifecycleActions`: defaults to `false`; enables audited pause/resume
+  requests for linked Fleet containers.
+- `lifecycleRequireApprovalRef`: defaults to `true`; requires a Paperclip
+  approval or Monolith change request reference before pause/resume is allowed.
 - `enableBudgetAlerts`: defaults to `true`; writes Paperclip activity alerts
   and metrics for active budget incidents, pending budget approvals, and high
   utilization.
@@ -117,6 +121,7 @@ Instance config fields:
   - `POST /fleet/register-existing`
   - `POST /fleet/repair-link`
   - `POST /fleet/sync-costs`
+  - `POST /fleet/lifecycle`
 - Scheduled job: `poll-fleet-links` refreshes configured company mappings every
   15 minutes.
 - Scheduled job: `scheduled-cost-sync` runs hourly. It is disabled by default,
@@ -135,6 +140,11 @@ Scheduled cost sync has a second guard: the hourly job skips unless
 Budget alerts do not mutate Fleet state; they route rollup-derived incident
 state into Paperclip activity and metrics, deduplicated by company and alert
 fingerprint.
+Pause/resume requests are disabled by default. When enabled, the connector
+requires a company-to-tenant mapping, verifies the target container appears in
+the company's Fleet ops rollup, requires an approval/change-request reference
+by default, queues Fleet's async lifecycle operation, and writes Paperclip
+activity plus metrics.
 
 ## Local Smoke Evidence
 
@@ -212,5 +222,5 @@ Remaining production hardening before calling this fully first-class:
 - live-smoke budget alert activity against a hosted Paperclip company with a
   real budget incident or forced high-utilization rollup;
 - live-smoke routine repair actions against a real routine-owning tenant;
-- add audited pause/resume hooks only after authorization and rollback semantics
-  are defined.
+- live-smoke audited pause/resume requests against a linked tenant after
+  operator approval semantics are configured.

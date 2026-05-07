@@ -21,6 +21,8 @@ export function normalizePostgresConnection(
   url: string,
   options: PostgresOptions = {},
 ): NormalizedPostgresConnection {
+  const resolvedOptions = applyConfiguredPostgresMaxConnections(options);
+
   try {
     const parsed = new URL(url);
     const socketPath = parsed.searchParams.get("host");
@@ -30,19 +32,36 @@ export function normalizePostgresConnection(
       parsed.searchParams.delete("port");
       return {
         url: parsed.toString(),
-        options: { ...options, path: `${socketPath}/.s.PGSQL.${port}` },
+        options: { ...resolvedOptions, path: `${socketPath}/.s.PGSQL.${port}` },
       };
     }
   } catch {
-    return { url, options };
+    return { url, options: resolvedOptions };
   }
 
-  return { url, options };
+  return { url, options: resolvedOptions };
 }
 
 export function createPostgresSql(url: string, options: PostgresOptions = {}) {
   const normalized = normalizePostgresConnection(url, options);
   return postgres(normalized.url, normalized.options);
+}
+
+function applyConfiguredPostgresMaxConnections(options: PostgresOptions): PostgresOptions {
+  if (options.max != null) return options;
+  const max = readConfiguredPostgresMaxConnections();
+  return max == null ? options : { ...options, max };
+}
+
+function readConfiguredPostgresMaxConnections(): number | null {
+  const raw = process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS?.trim();
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error("PAPERCLIP_DATABASE_MAX_CONNECTIONS must be a positive integer");
+  }
+  return parsed;
 }
 
 function createUtilitySql(url: string) {

@@ -7,4 +7,6 @@ node_modules
 coverage
 data
 tmp
+tmp-*
 *.log
+.env

@@ -56,12 +56,15 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
+COPY --chown=node:node deploy/plugins/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector
 RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client jq \
   && rm -rf /var/lib/apt/lists/* \
+  && cd /opt/paperclip/plugins/monolith-fleet-connector \
+  && npm ci --omit=dev --ignore-scripts \
   && mkdir -p /paperclip \
-  && chown node:node /paperclip
+  && chown -R node:node /paperclip /opt/paperclip/plugins
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
@@ -76,6 +79,7 @@ ENV NODE_ENV=production \
   USER_UID=${USER_UID} \
   USER_GID=${USER_GID} \
   PAPERCLIP_CONFIG=/paperclip/instances/default/config.json \
+  PAPERCLIP_BOOTSTRAP_PLUGIN_PATHS=/opt/paperclip/plugins/monolith-fleet-connector \
   PAPERCLIP_DEPLOYMENT_MODE=authenticated \
   PAPERCLIP_DEPLOYMENT_EXPOSURE=private \
   OPENCODE_ALLOW_ALL_MODELS=true

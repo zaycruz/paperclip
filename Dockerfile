@@ -48,8 +48,13 @@ COPY --from=deps /app /app
 COPY . .
 RUN pnpm --filter @paperclipai/ui build
 RUN pnpm --filter @paperclipai/plugin-sdk build
+RUN pnpm --filter @paperclipai/plugin-llm-wiki build
 RUN pnpm --filter @paperclipai/server build
 RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" && exit 1)
+RUN test -f packages/plugins/plugin-llm-wiki/dist/manifest.js \
+  && test -f packages/plugins/plugin-llm-wiki/dist/worker.js \
+  && test -f packages/plugins/plugin-llm-wiki/dist/ui/index.js \
+  || (echo "ERROR: LLM Wiki plugin build output missing" && exit 1)
 
 FROM base AS production
 ARG USER_UID=1000
@@ -57,12 +62,16 @@ ARG USER_GID=1000
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
 COPY --chown=node:node deploy/plugins/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector
+COPY --chown=node:node --from=build /app/packages/plugins/plugin-llm-wiki /opt/paperclip/plugins/plugin-llm-wiki
 RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client jq \
   && rm -rf /var/lib/apt/lists/* \
   && cd /opt/paperclip/plugins/monolith-fleet-connector \
   && npm ci --omit=dev --ignore-scripts \
+  && test -f /opt/paperclip/plugins/plugin-llm-wiki/dist/manifest.js \
+  && test -f /opt/paperclip/plugins/plugin-llm-wiki/dist/worker.js \
+  && test -f /opt/paperclip/plugins/plugin-llm-wiki/dist/ui/index.js \
   && mkdir -p /paperclip \
   && chown -R node:node /paperclip /opt/paperclip/plugins
 

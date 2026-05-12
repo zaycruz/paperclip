@@ -1,0 +1,42 @@
+{
+  "name": "@monolith/paperclip-fleet-connector",
+  "version": "0.1.0",
+  "description": "Paperclip plugin that exposes Monolith Fleet API agent health, repair, routine, and cost sync surfaces inside Paperclip.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "paperclipPlugin": {
+    "manifest": "./src/manifest.js",
+    "worker": "./src/worker.js",
+    "ui": "./src/ui/"
+  },
+  "files": [
+    "README.md",
+    "scripts/",
+    "tests/",
+    "src/"
+  ],
+  "exports": {
+    "./manifest": "./src/manifest.js",
+    "./logic": "./src/logic.js"
+  },
+  "scripts": {
+    "build:cloud-run-bundle": "node scripts/build-cloud-run-bundle.mjs",
+    "verify": "node --test tests/*.test.mjs && node scripts/verify.mjs",
+    "verify:fleet-api-target": "node scripts/verify-fleet-api-target.mjs"
+  },
+  "peerDependencies": {
+    "@paperclipai/plugin-sdk": ">=2026.512.0",
+    "react": ">=18"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "paperclip",
+    "monolith",
+    "fleet",
+    "connector",
+    "agents"
+  ]
+}

@@ -85,6 +85,19 @@ function createSelectQueueDb(rows: Array<Array<Record<string, unknown>>>) {
   };
 }
 
+function createSecretLookupDb(rows: Array<Array<Record<string, unknown>>>) {
+  return {
+    select: vi.fn((selection?: unknown) => ({
+      from: vi.fn(() => {
+        if (selection) return Promise.resolve([]);
+        return {
+          where: vi.fn(() => Promise.resolve(rows.shift() ?? [])),
+        };
+      }),
+    })),
+  };
+}
+
 const companyA = "22222222-2222-4222-8222-222222222222";
 const companyB = "33333333-3333-4333-8333-333333333333";
 const agentA = "44444444-4444-4444-8444-444444444444";
@@ -103,12 +116,13 @@ function boardActor(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function readyPlugin() {
+function readyPlugin(overrides: Record<string, unknown> = {}) {
   mockRegistry.getById.mockResolvedValue({
     id: pluginId,
     pluginKey: "paperclip.example",
     version: "1.0.0",
     status: "ready",
+    ...overrides,
   });
 }
 
@@ -224,27 +238,139 @@ describe.sequential("plugin install and upgrade authz", () => {
     expect(mockLifecycle.disable).not.toHaveBeenCalled();
   }, 20_000);
 
-  it("rejects plugin config saves that contain secret refs even for instance admins", async () => {
-    readyPlugin();
-
-    const { app } = await createApp({
-      type: "board",
-      userId: "admin-1",
-      source: "session",
-      isInstanceAdmin: true,
-      companyIds: [companyA],
+  it("rejects plugin config saves that reference unknown secrets", async () => {
+    readyPlugin({
+      manifestJson: {
+        instanceConfigSchema: {
+          type: "object",
+          properties: {
+            companyId: { type: "string" },
+            apiKeyRef: { type: "string", format: "secret-ref" },
+          },
+        },
+      },
     });
+
+    const { app } = await createApp(
+      {
+        type: "board",
+        userId: "admin-1",
+        source: "session",
+        isInstanceAdmin: true,
+        companyIds: [companyA],
+      },
+      {},
+      { db: createSecretLookupDb([[]]) },
+    );
 
     const res = await request(app)
       .post(`/api/plugins/${pluginId}/config`)
       .send({
         configJson: {
+          companyId: companyA,
           apiKeyRef: "77777777-7777-4777-8777-777777777777",
         },
       });
 
-    expect(res.status).toBe(422);
-    expect(res.body.error).toMatch(/secret references are disabled/i);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/configured secret reference was not found/i);
+    expect(mockRegistry.upsertConfig).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it("allows instance admins to save configured company-scoped secret refs", async () => {
+    readyPlugin({
+      manifestJson: {
+        instanceConfigSchema: {
+          type: "object",
+          properties: {
+            companyId: { type: "string" },
+            apiKeyRef: { type: "string", format: "secret-ref" },
+          },
+        },
+      },
+    });
+    mockRegistry.upsertConfig.mockResolvedValue({
+      pluginId,
+      configJson: {
+        companyId: companyA,
+        apiKeyRef: "77777777-7777-4777-8777-777777777777",
+      },
+    });
+
+    const { app } = await createApp(
+      {
+        type: "board",
+        userId: "admin-1",
+        source: "session",
+        isInstanceAdmin: true,
+        companyIds: [companyA],
+      },
+      {},
+      {
+        db: createSecretLookupDb([[
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            companyId: companyA,
+          },
+        ]]),
+      },
+    );
+
+    const configJson = {
+      companyId: companyA,
+      apiKeyRef: "77777777-7777-4777-8777-777777777777",
+    };
+    const res = await request(app)
+      .post(`/api/plugins/${pluginId}/config`)
+      .send({ configJson });
+
+    expect(res.status).toBe(200);
+    expect(mockRegistry.upsertConfig).toHaveBeenCalledWith(pluginId, { configJson });
+  }, 20_000);
+
+  it("rejects plugin config saves that reference another company's secret", async () => {
+    readyPlugin({
+      manifestJson: {
+        instanceConfigSchema: {
+          type: "object",
+          properties: {
+            companyId: { type: "string" },
+            apiKeyRef: { type: "string", format: "secret-ref" },
+          },
+        },
+      },
+    });
+
+    const { app } = await createApp(
+      {
+        type: "board",
+        userId: "admin-1",
+        source: "session",
+        isInstanceAdmin: true,
+        companyIds: [companyA],
+      },
+      {},
+      {
+        db: createSecretLookupDb([[
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            companyId: companyB,
+          },
+        ]]),
+      },
+    );
+
+    const res = await request(app)
+      .post(`/api/plugins/${pluginId}/config`)
+      .send({
+        configJson: {
+          companyId: companyA,
+          apiKeyRef: "77777777-7777-4777-8777-777777777777",
+        },
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/must belong to the configured company/i);
     expect(mockRegistry.upsertConfig).not.toHaveBeenCalled();
   }, 20_000);
 

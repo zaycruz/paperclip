@@ -533,8 +533,8 @@ export function startWorkerRpcHost(options: WorkerRpcHostOptions): WorkerRpcHost
       },
 
       secrets: {
-        async resolve(secretRef: string): Promise<string> {
-          return callHost("secrets.resolve", { secretRef });
+        async resolve(secretRef: string, options?: { companyId?: string | null }): Promise<string> {
+          return callHost("secrets.resolve", { secretRef, companyId: options?.companyId ?? null });
         },
       },
 

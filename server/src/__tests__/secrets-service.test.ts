@@ -12,12 +12,18 @@ import {
   companySecretVersions,
   companySecrets,
   createDb,
+  pluginConfig,
+  plugins,
   secretAccessEvents,
 } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { awsSecretsManagerProvider } from "../secrets/aws-secrets-manager-provider.js";
 import { localEncryptedProvider } from "../secrets/local-encrypted-provider.js";
 import { SecretProviderClientError } from "../secrets/types.js";
+import {
+  createPluginSecretsHandler,
+  validatePluginConfigSecretRefs,
+} from "../services/plugin-secrets-handler.js";
 import { secretService } from "../services/secrets.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
@@ -47,6 +53,8 @@ describeEmbeddedPostgres("secretService", () => {
     vi.restoreAllMocks();
     await db.delete(secretAccessEvents);
     await db.delete(companySecretBindings);
+    await db.delete(pluginConfig);
+    await db.delete(plugins);
     await db.delete(companySecretVersions);
     await db.delete(companySecrets);
     await db.delete(companySecretProviderConfigs);
@@ -77,6 +85,49 @@ describeEmbeddedPostgres("secretService", () => {
     return companyId;
   }
 
+  async function seedPlugin(configJson: Record<string, unknown>) {
+    const pluginId = randomUUID();
+    const manifestJson = {
+      apiVersion: 1,
+      id: "test.secret-plugin",
+      name: "Secret plugin",
+      version: "0.1.0",
+      capabilities: ["secrets.read-ref"],
+      instanceConfigSchema: {
+        type: "object",
+        properties: {
+          fleetApiTokenSecretRef: {
+            type: "string",
+            format: "secret-ref",
+          },
+          tenantIdByCompanyId: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+        },
+      },
+    };
+
+    await db.insert(plugins).values({
+      id: pluginId,
+      pluginKey: "test.secret-plugin",
+      packageName: "@test/secret-plugin",
+      version: "0.1.0",
+      apiVersion: 1,
+      categories: [],
+      manifestJson: manifestJson as never,
+      status: "installed",
+      installedAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(pluginConfig).values({
+      pluginId,
+      configJson,
+    });
+
+    return { pluginId, manifestJson };
+  }
+
   it("rejects cross-company secret references during env normalization", async () => {
     const companyA = await seedCompany("A");
     const companyB = await seedCompany("B");
@@ -92,6 +143,69 @@ describeEmbeddedPostgres("secretService", () => {
         API_KEY: { type: "secret_ref", secretId: foreignSecret.id, version: "latest" },
       }),
     ).rejects.toThrow(/same company/i);
+  });
+
+  it("resolves plugin secrets only inside the owning company scope", async () => {
+    const companyId = await seedCompany();
+    const otherCompanyId = await seedCompany("Other");
+    const svc = secretService(db);
+    const secret = await svc.create(companyId, {
+      name: `fleet-token-${randomUUID()}`,
+      provider: "local_encrypted",
+      value: "test-token-value",
+    });
+    const { pluginId } = await seedPlugin({
+      fleetApiTokenSecretRef: secret.id,
+      tenantIdByCompanyId: {
+        [companyId]: "tenant-a",
+      },
+    });
+    const pluginSecrets = createPluginSecretsHandler({ db, pluginId });
+
+    await expect(pluginSecrets.resolve({ secretRef: secret.id, companyId })).resolves.toBe(
+      "test-token-value",
+    );
+    await expect(pluginSecrets.resolve({ secretRef: secret.id })).resolves.toBe(
+      "test-token-value",
+    );
+    await expect(
+      pluginSecrets.resolve({ secretRef: secret.id, companyId: otherCompanyId }),
+    ).rejects.toThrow("Secret not found");
+  });
+
+  it("rejects plugin config secret refs outside the configured company", async () => {
+    const companyId = await seedCompany();
+    const otherCompanyId = await seedCompany("Other");
+    const svc = secretService(db);
+    const secret = await svc.create(otherCompanyId, {
+      name: `fleet-token-${randomUUID()}`,
+      provider: "local_encrypted",
+      value: "test-token-value",
+    });
+    const configJson = {
+      fleetApiTokenSecretRef: secret.id,
+      tenantIdByCompanyId: {
+        [companyId]: "tenant-a",
+      },
+    };
+    const schema = {
+      type: "object",
+      properties: {
+        fleetApiTokenSecretRef: {
+          type: "string",
+          format: "secret-ref",
+        },
+        tenantIdByCompanyId: {
+          type: "object",
+          additionalProperties: { type: "string" },
+        },
+      },
+    };
+
+    await expect(validatePluginConfigSecretRefs({ db, configJson, schema })).resolves.toEqual({
+      valid: false,
+      error: "Configured secret reference must belong to the configured company",
+    });
   });
 
   it("prevents duplicate bindings for a target config path", async () => {

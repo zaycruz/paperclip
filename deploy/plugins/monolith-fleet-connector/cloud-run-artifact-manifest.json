@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "packageName": "@monolith/paperclip-fleet-connector",
+  "packageVersion": "0.1.0",
+  "pluginId": "raava.monolith-fleet-connector",
+  "pluginVersion": "0.1.0",
+  "paperclipPlugin": {
+    "manifest": "./src/manifest.js",
+    "worker": "./src/worker.js",
+    "ui": "./src/ui/"
+  },
+  "cloudRun": {
+    "imagePath": "/opt/paperclip/plugins/monolith-fleet-connector",
+    "installEndpoint": "POST /api/plugins/install",
+    "installPayload": {
+      "packageName": "/opt/paperclip/plugins/monolith-fleet-connector",
+      "isLocalPath": true
+    },
+    "dockerfileSnippet": [
+      "COPY packages/paperclip-fleet-connector/dist/cloud-run/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector",
+      "RUN cd /opt/paperclip/plugins/monolith-fleet-connector && npm ci --omit=dev --ignore-scripts"
+    ],
+    "notes": [
+      "Use this local-path install only when the same bundle path is baked into every Cloud Run revision.",
+      "Do not point Cloud Run at a workstation path; the path must exist inside the Paperclip container image.",
+      "For dynamic npm installs, publish the package to a registry instead and install by package name/version."
+    ]
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 10146,
+      "sha256": "b6998cfb8174721f4ee9ee18581ec093360fa64f26feb384c8a2f4a4e7fe5921"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 2224,
+      "sha256": "91c56a7f932cc6d9c54c170ed0f41477b66d3ed85a59fa337a373db2a271a955"
+    },
+    {
+      "path": "package.json",
+      "bytes": 1032,
+      "sha256": "08eead8cffc905ceeac948d38867fae091756ff7ba40744faca2d1f2b47ae126"
+    },
+    {
+      "path": "paperclip-install-payload.json",
+      "bytes": 94,
+      "sha256": "9e1250988725025b44ce72ffbac6f2ae543fd5a626a0c16fca23d8da96637b85"
+    },
+    {
+      "path": "scripts/build-cloud-run-bundle.mjs",
+      "bytes": 5619,
+      "sha256": "ac72e3cebe924e7ec174ec8d88950e41625a8fa5f05a4adb353d1b47e427739b"
+    },
+    {
+      "path": "scripts/verify-fleet-api-target.mjs",
+      "bytes": 3378,
+      "sha256": "95b8f82c01eebdfcae739e169958c78cf2f07687994cdc3c50c81e0a69f5845c"
+    },
+    {
+      "path": "scripts/verify.mjs",
+      "bytes": 5845,
+      "sha256": "3feecc47e52a075a307b87c8a325ea77262ad10ba664dde1551c65d3d850e003"
+    },
+    {
+      "path": "src/constants.js",
+      "bytes": 1903,
+      "sha256": "32cfb206b5393cf264a828d481aa36478baed56218abc0ee79aaa7bfe9c0ae14"
+    },
+    {
+      "path": "src/logic.js",
+      "bytes": 12976,
+      "sha256": "44a1b0646ca5967d6914f218d6a9e12494e266a333c685ed35f51d1c00c2aa57"
+    },
+    {
+      "path": "src/manifest.js",
+      "bytes": 6606,
+      "sha256": "540705764c7c289b0b59530eda12279c8a3fac462f1aa500e266363bec9f17c9"
+    },
+    {
+      "path": "src/ui/index.js",
+      "bytes": 7791,
+      "sha256": "6025849bff72f7e1f22ee3e508121a89d23eabca2de9e302de7901b85f25b3e0"
+    },
+    {
+      "path": "src/worker.js",
+      "bytes": 19037,
+      "sha256": "f2c7d903ae57769b0f96a60a9297ba373a7ad09147d45ec3b19622274c07887e"
+    },
+    {
+      "path": "tests/logic.test.mjs",
+      "bytes": 6258,
+      "sha256": "06c2a1a497304fd83547909cc829b3d29a935e0d08edf63d90f546631b3a3272"
+    }
+  ]
+}

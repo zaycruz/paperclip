@@ -33,15 +33,17 @@
  * @see services/secrets.ts — secretService used by agent env bindings
  */
 
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import { companySecrets, companySecretVersions, pluginConfig } from "@paperclipai/db";
+import type { SecretProvider } from "@paperclipai/shared";
+import { getSecretProvider } from "../secrets/provider-registry.js";
+import { pluginRegistryService } from "./plugin-registry.js";
 import {
   collectSecretRefPaths,
   isUuidSecretRef,
   readConfigValueAtPath,
 } from "./json-schema-secret-refs.js";
-
-export const PLUGIN_SECRET_REFS_DISABLED_MESSAGE =
-  "Plugin secret references are disabled until company-scoped plugin config lands";
 
 // ---------------------------------------------------------------------------
 // Error helpers
@@ -50,6 +52,18 @@ export const PLUGIN_SECRET_REFS_DISABLED_MESSAGE =
 function invalidSecretRef(secretRef: string): Error {
   const err = new Error(`Invalid secret reference: ${secretRef}`);
   err.name = "InvalidSecretRefError";
+  return err;
+}
+
+function secretNotFound(secretRef: string): Error {
+  const err = new Error(`Secret not found: ${secretRef}`);
+  err.name = "SecretNotFoundError";
+  return err;
+}
+
+function secretVersionNotFound(secretRef: string): Error {
+  const err = new Error(`No version found for secret: ${secretRef}`);
+  err.name = "SecretVersionNotFoundError";
   return err;
 }
 
@@ -125,6 +139,8 @@ export function extractSecretRefPathsFromConfig(
 export interface PluginSecretsResolveParams {
   /** The secret reference string (a secret UUID). */
   secretRef: string;
+  /** Company context for company-scoped secrets. */
+  companyId?: string | null;
 }
 
 /**
@@ -154,6 +170,81 @@ export interface PluginSecretsService {
    *   the provider fails to resolve
    */
   resolve(params: PluginSecretsResolveParams): Promise<string>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+function readConfiguredCompanyIds(configJson: unknown): Set<string> {
+  const ids = new Set<string>();
+  const config = asRecord(configJson);
+  if (!config) return ids;
+
+  const directCompanyId = stringValue(config.companyId);
+  if (isUuidSecretRef(directCompanyId)) ids.add(directCompanyId);
+
+  const tenantMap = asRecord(config.tenantIdByCompanyId);
+  if (tenantMap) {
+    for (const companyId of Object.keys(tenantMap)) {
+      const cleanCompanyId = companyId.trim();
+      if (isUuidSecretRef(cleanCompanyId)) ids.add(cleanCompanyId);
+    }
+  }
+
+  return ids;
+}
+
+function resolveCompanyScope(paramsCompanyId: unknown, configJson: unknown): string | null {
+  const requestedCompanyId = stringValue(paramsCompanyId);
+  if (isUuidSecretRef(requestedCompanyId)) return requestedCompanyId;
+
+  const configuredCompanyIds = readConfiguredCompanyIds(configJson);
+  if (configuredCompanyIds.size === 1) {
+    return Array.from(configuredCompanyIds)[0] ?? null;
+  }
+  return null;
+}
+
+export async function validatePluginConfigSecretRefs(input: {
+  db: Db;
+  configJson: unknown;
+  schema?: Record<string, unknown> | null;
+}): Promise<{ valid: true } | { valid: false; error: string }> {
+  const refs = extractSecretRefsFromConfig(input.configJson, input.schema);
+  if (refs.size === 0) return { valid: true };
+
+  const configuredCompanyIds = readConfiguredCompanyIds(input.configJson);
+  for (const ref of refs) {
+    const secret = await input.db
+      .select()
+      .from(companySecrets)
+      .where(eq(companySecrets.id, ref))
+      .then((rows) => rows[0] ?? null);
+
+    if (!secret) {
+      return { valid: false, error: `Configured secret reference was not found: ${ref}` };
+    }
+    if (configuredCompanyIds.size === 1 && !configuredCompanyIds.has(secret.companyId)) {
+      return {
+        valid: false,
+        error: "Configured secret reference must belong to the configured company",
+      };
+    }
+    if (configuredCompanyIds.size > 1) {
+      return {
+        valid: false,
+        error: "Company-scoped secret references require a single configured company",
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 /**
@@ -199,14 +290,20 @@ function createRateLimiter(maxAttempts: number, windowMs: number) {
 export function createPluginSecretsHandler(
   options: PluginSecretsHandlerOptions,
 ): PluginSecretsService {
-  const { pluginId } = options;
+  const { db, pluginId } = options;
+  const registry = pluginRegistryService(db);
 
   // Rate limit: max 30 resolution attempts per plugin per minute
   const rateLimiter = createRateLimiter(30, 60_000);
 
+  let cachedAllowedRefs: Set<string> | null = null;
+  let cachedConfigJson: unknown = null;
+  let cachedAllowedRefsExpiry = 0;
+  const CONFIG_CACHE_TTL_MS = 30_000; // 30 seconds, matches event bus TTL
+
   return {
     async resolve(params: PluginSecretsResolveParams): Promise<string> {
-      const { secretRef } = params;
+      const { secretRef, companyId } = params;
 
       // ---------------------------------------------------------------
       // 0. Rate limiting — prevent brute-force UUID enumeration
@@ -230,9 +327,80 @@ export function createPluginSecretsHandler(
         throw invalidSecretRef(trimmedRef);
       }
 
-      // Fail closed until plugin config and worker runtime both carry an
-      // explicit company scope for secret bindings and resolution.
-      throw new Error(PLUGIN_SECRET_REFS_DISABLED_MESSAGE);
+      // ---------------------------------------------------------------
+      // 1b. Scope check — only allow secrets referenced in this plugin's config
+      // ---------------------------------------------------------------
+      const now = Date.now();
+      if (!cachedAllowedRefs || now > cachedAllowedRefsExpiry) {
+        const [configRow, plugin] = await Promise.all([
+          db
+            .select()
+            .from(pluginConfig)
+            .where(eq(pluginConfig.pluginId, pluginId))
+            .then((rows) => rows[0] ?? null),
+          registry.getById(pluginId),
+        ]);
+
+        const schema = (plugin?.manifestJson as unknown as Record<string, unknown> | null)
+          ?.instanceConfigSchema as Record<string, unknown> | undefined;
+        cachedConfigJson = configRow?.configJson ?? {};
+        cachedAllowedRefs = extractSecretRefsFromConfig(cachedConfigJson, schema);
+        cachedAllowedRefsExpiry = now + CONFIG_CACHE_TTL_MS;
+      }
+
+      if (!cachedAllowedRefs.has(trimmedRef)) {
+        // Return "not found" to avoid leaking whether the secret exists
+        throw secretNotFound(trimmedRef);
+      }
+
+      const companyScopeId = resolveCompanyScope(companyId, cachedConfigJson);
+      if (!companyScopeId) {
+        // Company secrets must be resolved in a company context. Use the same
+        // outward error as a missing ref so callers cannot probe secret scope.
+        throw secretNotFound(trimmedRef);
+      }
+
+      // ---------------------------------------------------------------
+      // 2. Look up the secret record by UUID
+      // ---------------------------------------------------------------
+      const secret = await db
+        .select()
+        .from(companySecrets)
+        .where(and(eq(companySecrets.id, trimmedRef), eq(companySecrets.companyId, companyScopeId)))
+        .then((rows) => rows[0] ?? null);
+
+      if (!secret) {
+        throw secretNotFound(trimmedRef);
+      }
+
+      // ---------------------------------------------------------------
+      // 3. Fetch the latest version's material
+      // ---------------------------------------------------------------
+      const versionRow = await db
+        .select()
+        .from(companySecretVersions)
+        .where(
+          and(
+            eq(companySecretVersions.secretId, secret.id),
+            eq(companySecretVersions.version, secret.latestVersion),
+          ),
+        )
+        .then((rows) => rows[0] ?? null);
+
+      if (!versionRow) {
+        throw secretVersionNotFound(trimmedRef);
+      }
+
+      // ---------------------------------------------------------------
+      // 4. Resolve through the appropriate secret provider
+      // ---------------------------------------------------------------
+      const provider = getSecretProvider(secret.provider as SecretProvider);
+      const resolved = await provider.resolveVersion({
+        material: versionRow.material as Record<string, unknown>,
+        externalRef: secret.externalRef,
+      });
+
+      return resolved;
     },
   };
 }

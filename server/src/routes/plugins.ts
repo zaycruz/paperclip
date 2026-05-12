@@ -66,6 +66,7 @@ import {
   getActorInfo,
 } from "./authz.js";
 import { validateInstanceConfig } from "../services/plugin-config-validator.js";
+import { validatePluginConfigSecretRefs } from "../services/plugin-secrets-handler.js";
 import {
   findLocalFolderDeclaration,
   getStoredLocalFolders,
@@ -73,10 +74,6 @@ import {
   requireLocalFolderDeclaration,
   setStoredLocalFolder,
 } from "../services/plugin-local-folders.js";
-import {
-  extractSecretRefPathsFromConfig,
-  PLUGIN_SECRET_REFS_DISABLED_MESSAGE,
-} from "../services/plugin-secrets-handler.js";
 import { badRequest, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 
 /** UI slot declaration extracted from plugin manifest */
@@ -1944,13 +1941,17 @@ export function pluginRoutes(
       }
     }
 
-    try {
-      const secretRefsByPath = extractSecretRefPathsFromConfig(body.configJson, schema);
-      if (secretRefsByPath.size > 0) {
-        res.status(422).json({ error: PLUGIN_SECRET_REFS_DISABLED_MESSAGE });
-        return;
-      }
+    const secretRefValidation = await validatePluginConfigSecretRefs({
+      db,
+      configJson: body.configJson,
+      schema,
+    });
+    if (!secretRefValidation.valid) {
+      res.status(400).json({ error: secretRefValidation.error });
+      return;
+    }
 
+    try {
       const result = await registry.upsertConfig(plugin.id, {
         configJson: body.configJson,
       });

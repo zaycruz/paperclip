@@ -601,9 +601,10 @@ export interface PluginSecretsClient {
    * written to logs, config, or other persistent storage.
    *
    * @param secretRef - The secret reference string from plugin config
+   * @param options.companyId - Company context for company-scoped secrets
    * @returns The resolved secret value
    */
-  resolve(secretRef: string): Promise<string>;
+  resolve(secretRef: string, options?: { companyId?: string | null }): Promise<string>;
 }
 
 /**

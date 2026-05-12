@@ -5,6 +5,7 @@ import postgres from "postgres";
 import {
   applyPendingMigrations,
   inspectMigrations,
+  normalizePostgresConnection,
 } from "./client.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -14,6 +15,7 @@ import {
 const cleanups: Array<() => Promise<void>> = [];
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const originalPaperclipDatabaseMaxConnections = process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS;
 
 async function createTempDatabase(): Promise<string> {
   const db = await startEmbeddedPostgresTestDatabase("paperclip-db-client-");
@@ -30,6 +32,12 @@ async function migrationHash(migrationFile: string): Promise<string> {
 }
 
 afterEach(async () => {
+  if (originalPaperclipDatabaseMaxConnections == null) {
+    delete process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS;
+  } else {
+    process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS = originalPaperclipDatabaseMaxConnections;
+  }
+
   while (cleanups.length > 0) {
     const cleanup = cleanups.pop();
     await cleanup?.();
@@ -41,6 +49,65 @@ if (!embeddedPostgresSupport.supported) {
     `Skipping embedded Postgres migration tests on this host: ${embeddedPostgresSupport.reason ?? "unsupported environment"}`,
   );
 }
+
+describe("normalizePostgresConnection", () => {
+  it("maps Cloud SQL host query strings to postgres.js socket paths", () => {
+    const onnotice = () => {};
+    const normalized = normalizePostgresConnection(
+      "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:us-east1:instance",
+      { max: 1, onnotice },
+    );
+
+    expect(normalized.url).toBe("postgresql://paperclip:secret@localhost/paperclip");
+    expect(normalized.options).toEqual({
+      max: 1,
+      onnotice,
+      path: "/cloudsql/project:us-east1:instance/.s.PGSQL.5432",
+    });
+  });
+
+  it("removes Cloud SQL port query strings after folding them into the socket path", () => {
+    const normalized = normalizePostgresConnection(
+      "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:us-east1:instance&port=5433",
+      { max: 1 },
+    );
+
+    expect(normalized.url).toBe("postgresql://paperclip:secret@localhost/paperclip");
+    expect(normalized.options.path).toBe("/cloudsql/project:us-east1:instance/.s.PGSQL.5433");
+  });
+
+  it("preserves non-Cloud-SQL connection strings", () => {
+    const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
+
+    expect(normalizePostgresConnection(url, { max: 1 })).toEqual({
+      url,
+      options: { max: 1 },
+    });
+  });
+
+  it("applies PAPERCLIP_DATABASE_MAX_CONNECTIONS when no explicit pool max is provided", () => {
+    process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS = "2";
+    const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
+
+    expect(normalizePostgresConnection(url).options.max).toBe(2);
+  });
+
+  it("keeps an explicit pool max ahead of PAPERCLIP_DATABASE_MAX_CONNECTIONS", () => {
+    process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS = "2";
+    const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
+
+    expect(normalizePostgresConnection(url, { max: 1 }).options.max).toBe(1);
+  });
+
+  it("rejects invalid PAPERCLIP_DATABASE_MAX_CONNECTIONS values", () => {
+    process.env.PAPERCLIP_DATABASE_MAX_CONNECTIONS = "0";
+    const url = "postgres://paperclip:paperclip@127.0.0.1:5432/paperclip";
+
+    expect(() => normalizePostgresConnection(url)).toThrow(
+      "PAPERCLIP_DATABASE_MAX_CONNECTIONS must be a positive integer",
+    );
+  });
+});
 
 describeEmbeddedPostgres("applyPendingMigrations", () => {
   it(

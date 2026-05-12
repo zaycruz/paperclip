@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { open as openFile } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
-import postgres from "postgres";
+import { createPostgresSql } from "./client.js";
 
 export type BackupRetentionPolicy = {
   dailyDays: number;
@@ -499,7 +499,7 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
   const canUsePgDump = !hasBackupTransforms(opts);
   const excludedTableNames = normalizeTableNameSet(opts.excludeTables);
   const nullifiedColumnsByTable = normalizeNullifyColumnMap(opts.nullifyColumns);
-  let sql = postgres(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
+  let sql = createPostgresSql(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
   let sqlClosed = false;
   const closeSql = async () => {
     if (sqlClosed) return;
@@ -536,7 +536,7 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
         if (backupEngine === "pg_dump") {
           throw error;
         }
-        sql = postgres(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
+        sql = createPostgresSql(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
         sqlClosed = false;
       }
     }
@@ -871,7 +871,7 @@ export async function runDatabaseBackup(opts: RunDatabaseBackupOptions): Promise
       if (backupEngine !== "javascript" && nullifiedColumns.size === 0) {
         emit(`COPY ${qualifiedTableName} (${colNames}) FROM stdin;`);
         await writer.writeRaw("\n");
-        const copySql = postgres(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
+        const copySql = createPostgresSql(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
         try {
           const copyStream = await copySql
             .unsafe(`COPY ${qualifiedTableName} (${colNames}) TO STDOUT`)
@@ -968,7 +968,7 @@ export async function runDatabaseRestore(opts: RunDatabaseRestoreOptions): Promi
     }
   }
 
-  const sql = postgres(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
+  const sql = createPostgresSql(opts.connectionString, { max: 1, connect_timeout: connectTimeout });
 
   try {
     await sql`SELECT 1`;

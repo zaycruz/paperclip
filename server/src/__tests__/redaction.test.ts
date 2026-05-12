@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { REDACTED_EVENT_VALUE, redactEventPayload, redactSensitiveText, sanitizeRecord } from "../redaction.js";
+import {
+  REDACTED_EVENT_VALUE,
+  redactEventPayload,
+  redactSensitiveText,
+  sanitizeErrorForLog,
+  sanitizeLogRecord,
+  sanitizeRecord,
+} from "../redaction.js";
 
 describe("redaction", () => {
   it("redacts sensitive keys and nested secret values", () => {
@@ -73,6 +80,9 @@ describe("redaction", () => {
       `escaped {\\"apiKey\\":\\"escaped-json-secret\\"}`,
       `GITHUB_TOKEN=${githubToken}`,
       `session=${jwt}`,
+      "DATABASE_URL=postgres://paperclip:db-secret@localhost:5432/paperclip",
+      "callback=https://example.com/run?token=query-secret&safe=value",
+      "secret-ref://paperclip/company/openai-token",
     ].join("\n");
 
     const result = redactSensitiveText(input);
@@ -83,6 +93,9 @@ describe("redaction", () => {
     expect(result).not.toContain("escaped-json-secret");
     expect(result).not.toContain(githubToken);
     expect(result).not.toContain(jwt);
+    expect(result).not.toContain("db-secret");
+    expect(result).not.toContain("query-secret");
+    expect(result).not.toContain("secret-ref://paperclip/company/openai-token");
   });
 
   it("redacts inline secrets from command metadata without hiding safe command text", () => {
@@ -130,5 +143,71 @@ describe("redaction", () => {
 
     expect(result?.args).toEqual(["--api-key", "not-a-command-secret"]);
     expect(result?.argv).toEqual(["--api-key", REDACTED_EVENT_VALUE]);
+  });
+
+  it("redacts log payloads more aggressively than activity payloads", () => {
+    const result = sanitizeLogRecord({
+      configJson: {
+        token: "plain-token",
+        apiKeyRef: {
+          type: "secret_ref",
+          secretId: "11111111-1111-4111-8111-111111111111",
+        },
+        safe: "visible",
+      },
+      reqQuery: {
+        token: "query-token",
+        view: "compact",
+      },
+      usage: {
+        inputTokens: 12,
+        outputTokens: 3,
+      },
+    });
+
+    expect(result).toEqual({
+      configJson: {
+        token: REDACTED_EVENT_VALUE,
+        apiKeyRef: {
+          type: "secret_ref",
+          secretId: REDACTED_EVENT_VALUE,
+        },
+        safe: "visible",
+      },
+      reqQuery: {
+        token: REDACTED_EVENT_VALUE,
+        view: "compact",
+      },
+      usage: {
+        inputTokens: 12,
+        outputTokens: 3,
+      },
+    });
+  });
+
+  it("sanitizes Error objects before structured logging", () => {
+    const error = new Error(
+      "connect postgres://paperclip:db-secret@localhost:5432/paperclip?password=query-secret failed",
+    );
+    error.stack = [
+      "Error: connect postgres://paperclip:db-secret@localhost:5432/paperclip",
+      "    at startup (server.ts:1)",
+      "secret-ref://paperclip/company/fleet-token",
+    ].join("\n");
+    Object.assign(error, {
+      code: "ECONNREFUSED",
+      connectionString: "postgres://paperclip:db-secret@localhost:5432/paperclip",
+    });
+
+    const sanitized = sanitizeErrorForLog(error);
+
+    expect(sanitized).toEqual(expect.objectContaining({
+      name: "Error",
+      code: "ECONNREFUSED",
+      connectionString: REDACTED_EVENT_VALUE,
+    }));
+    expect(JSON.stringify(sanitized)).not.toContain("db-secret");
+    expect(JSON.stringify(sanitized)).not.toContain("query-secret");
+    expect(JSON.stringify(sanitized)).not.toContain("secret-ref://paperclip/company/fleet-token");
   });
 });

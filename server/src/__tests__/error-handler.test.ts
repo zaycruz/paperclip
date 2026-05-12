@@ -50,4 +50,21 @@ describe("errorHandler", () => {
     expect(res.err).toBe(err);
     expect(res.__errorContext?.error?.message).toBe("db exploded");
   });
+
+  it("sanitizes error context used by structured HTTP logs", () => {
+    const req = {
+      ...makeReq(),
+      body: { token: "body-secret", safe: "value" },
+      query: { apiKey: "query-secret", view: "compact" },
+    } as Request;
+    const res = makeRes() as any;
+    const next = vi.fn() as unknown as NextFunction;
+    const err = new Error("connect postgres://paperclip:db-secret@localhost:5432/paperclip failed");
+
+    errorHandler(err, req, res, next);
+
+    expect(res.__errorContext?.error?.message).not.toContain("db-secret");
+    expect(res.__errorContext?.reqBody).toEqual({ token: "***REDACTED***", safe: "value" });
+    expect(res.__errorContext?.reqQuery).toEqual({ apiKey: "***REDACTED***", view: "compact" });
+  });
 });

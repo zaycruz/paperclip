@@ -238,6 +238,36 @@ describe.sequential("plugin install and upgrade authz", () => {
     expect(mockLifecycle.disable).not.toHaveBeenCalled();
   }, 20_000);
 
+  it("resolves dotted plugin keys without attempting UUID lookup", async () => {
+    const pluginKey = "raava.monolith-fleet-connector";
+    const plugin = {
+      id: pluginId,
+      pluginKey,
+      packageName: "@monolith/paperclip-fleet-connector",
+      version: "0.1.0",
+      status: "ready",
+    };
+    mockRegistry.getById.mockRejectedValue(new Error("invalid input syntax for type uuid"));
+    mockRegistry.getByKey.mockResolvedValue(plugin);
+
+    const { app } = await createApp(boardActor({
+      userId: "admin-1",
+      isInstanceAdmin: true,
+      companyIds: [],
+    }));
+
+    const getRes = await request(app).get(`/api/plugins/${pluginKey}`);
+    expect(getRes.status).toBe(200);
+    expect(getRes.body).toEqual(expect.objectContaining({ id: pluginId, pluginKey }));
+
+    mockLifecycle.unload.mockResolvedValue(plugin);
+    const deleteRes = await request(app).delete(`/api/plugins/${pluginKey}`);
+    expect(deleteRes.status).toBe(200);
+    expect(mockRegistry.getById).not.toHaveBeenCalled();
+    expect(mockRegistry.getByKey).toHaveBeenCalledWith(pluginKey);
+    expect(mockLifecycle.unload).toHaveBeenCalledWith(pluginId, false);
+  }, 20_000);
+
   it("rejects plugin config saves that reference unknown secrets", async () => {
     readyPlugin({
       manifestJson: {

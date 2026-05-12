@@ -59,6 +59,7 @@ import { pluginRegistryService } from "./services/plugin-registry.js";
 import { createHostClientHandlers } from "@paperclipai/plugin-sdk";
 import type { BetterAuthSessionResult } from "./auth/better-auth.js";
 import { createCachedViteHtmlRenderer } from "./vite-html-renderer.js";
+import { sanitizeErrorForLog } from "./redaction.js";
 
 type UiMode = "none" | "static" | "vite-dev";
 const FEEDBACK_EXPORT_FLUSH_INTERVAL_MS = 5_000;
@@ -407,18 +408,18 @@ export async function createApp(
   const feedbackExportTimer = opts.feedbackExportService
     ? setInterval(() => {
       void opts.feedbackExportService?.flushPendingFeedbackTraces().catch((err) => {
-        logger.error({ err }, "Failed to flush pending feedback exports");
+        logger.error({ err: sanitizeErrorForLog(err) }, "Failed to flush pending feedback exports");
       });
     }, FEEDBACK_EXPORT_FLUSH_INTERVAL_MS)
     : null;
   feedbackExportTimer?.unref?.();
   if (opts.feedbackExportService) {
     void opts.feedbackExportService.flushPendingFeedbackTraces().catch((err) => {
-      logger.error({ err }, "Failed to flush pending feedback exports");
+      logger.error({ err: sanitizeErrorForLog(err) }, "Failed to flush pending feedback exports");
     });
   }
   void toolDispatcher.initialize().catch((err) => {
-    logger.error({ err }, "Failed to initialize plugin tool dispatcher");
+    logger.error({ err: sanitizeErrorForLog(err) }, "Failed to initialize plugin tool dispatcher");
   });
   const devWatcher = opts.uiMode === "vite-dev"
     ? createPluginDevWatcher(
@@ -434,7 +435,7 @@ export async function createApp(
       }
     }
   }).catch((err) => {
-    logger.error({ err }, "Failed to load ready plugins on startup");
+    logger.error({ err: sanitizeErrorForLog(err) }, "Failed to load ready plugins on startup");
   });
   process.once("exit", () => {
     if (feedbackExportTimer) clearInterval(feedbackExportTimer);

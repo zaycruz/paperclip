@@ -5,11 +5,15 @@ import {
   buildBudgetAlertSignal,
   buildFleetUrl,
   buildLifecycleActionParams,
+  buildManagedRoutineReconciliationPayload,
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
   buildScheduledCostSyncParams,
+  buildRoutineAuthorityPreviewPayload,
+  buildRoutineMirrorRequest,
   clampHours,
+  getManagedRoutineSet,
   normalizeConfig,
   requireTenantId,
   summarizeOpsRollup,
@@ -34,6 +38,8 @@ test("normalizes connector config and clamps runtime windows", () => {
   assert.equal(config.enableRepairActions, false);
   assert.equal(config.enableLifecycleActions, true);
   assert.equal(config.lifecycleRequireApprovalRef, false);
+  assert.equal(config.enableRoutineMirrorActions, false);
+  assert.equal(config.routineMirrorRequireApprovalRef, true);
   assert.equal(config.enableBudgetAlerts, true);
   assert.equal(config.budgetAlertUtilizationPercent, 100);
   assert.equal(config.enableScheduledCostSync, true);
@@ -41,6 +47,66 @@ test("normalizes connector config and clamps runtime windows", () => {
   assert.equal(config.scheduledCostSyncHours, 720);
   assert.equal(clampHours(0), 1);
   assert.equal(clampHours(9999), 720);
+});
+
+test("builds IJT managed routine authority payloads by stable routine key", () => {
+  const config = {
+    fleetApiBaseUrl: "https://fleet.example",
+    tenantIdByCompanyId: { "company-ijt": "ijt-capital" },
+  };
+  const routineSet = getManagedRoutineSet({ companyId: "company-ijt" }, config);
+  assert.equal(routineSet.setKey, "ijt-capital-managed-outcomes");
+  assert.deepEqual(
+    routineSet.routines.map((routine) => routine.routineKey),
+    [
+      "ijt-capital.coo.daily-operating-brief",
+      "ijt-capital.coo.routine-reconciliation",
+      "ijt-capital.coo.fleet-link-health",
+    ],
+  );
+
+  const preview = buildRoutineAuthorityPreviewPayload({ companyId: "company-ijt" }, config);
+  assert.equal(preview.tenant_id, "ijt-capital");
+  assert.equal(preview.match_key, "routine_key");
+  assert.equal(preview.managed_routines[0].routine_key, "ijt-capital.coo.daily-operating-brief");
+  assert.equal(preview.managed_routines[0].assignee_runtime_ref, "raava-ijt-capital-aurum-coo");
+
+  assert.deepEqual(
+    buildManagedRoutineReconciliationPayload({ companyId: "company-ijt", dryRun: "false" }, config),
+    {
+      ...preview,
+      dry_run: false,
+      include_hermes_contracts: true,
+    },
+  );
+});
+
+test("keeps Paperclip-to-Hermes routine mirror apply behind flags and approvals", () => {
+  const config = {
+    fleetApiBaseUrl: "https://fleet.example",
+    tenantIdByCompanyId: { "company-ijt": "ijt-capital" },
+  };
+  const blockedByFlag = buildRoutineMirrorRequest({ companyId: "company-ijt", apply: true }, config);
+  assert.equal(blockedByFlag.blocked, true);
+  assert.equal(blockedByFlag.reason, "Routine mirror apply is disabled in plugin settings");
+  assert.equal(blockedByFlag.payload.match_key, "routine_key");
+
+  const blockedByApproval = buildRoutineMirrorRequest(
+    { companyId: "company-ijt", apply: true },
+    { ...config, enableRoutineMirrorActions: true },
+  );
+  assert.equal(blockedByApproval.blocked, true);
+  assert.match(blockedByApproval.reason, /approvalRef/);
+
+  const allowed = buildRoutineMirrorRequest(
+    { companyId: "company-ijt", apply: true, approvalRef: "RAA-463", reason: "approved pilot" },
+    { ...config, enableRoutineMirrorActions: true },
+  );
+  assert.equal(allowed.blocked, false);
+  assert.equal(allowed.dryRun, false);
+  assert.equal(allowed.approvalRef, "RAA-463");
+  assert.equal(allowed.payload.reason, "approved pilot");
+  assert.equal(allowed.payload.managed_routines.length, 3);
 });
 
 test("builds Fleet API URLs without duplicating /api", () => {

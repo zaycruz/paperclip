@@ -14,11 +14,15 @@ import {
   buildCostSyncPayload,
   buildFleetUrl,
   buildLifecycleActionParams,
+  buildManagedRoutineReconciliationPayload,
   buildOverviewStatus,
   buildRegisterExistingPayload,
   buildRepairPayload,
   buildRoutineRepairRequest,
+  buildRoutineAuthorityPreviewPayload,
+  buildRoutineMirrorRequest,
   buildScheduledCostSyncParams,
+  getManagedRoutineSet,
   clampHours,
   normalizeConfig,
   redactConfig,
@@ -35,6 +39,10 @@ const BOARD_ONLY_API_ROUTES = new Set([
   ROUTE_KEYS.syncCosts,
   ROUTE_KEYS.lifecycle,
   ROUTE_KEYS.reconcileManagedResources,
+  ROUTE_KEYS.routineAuthorityPreview,
+  ROUTE_KEYS.managedRoutineReconciliation,
+  ROUTE_KEYS.dryRunRoutineMirrorStatus,
+  ROUTE_KEYS.approvedRoutineMirror,
 ]);
 
 function stringField(value) {
@@ -673,6 +681,173 @@ async function repairRoutineDrift(ctx, params = {}) {
   }
 }
 
+async function loadFleetLinkHealth(ctx, companyId, params = {}) {
+  if (!companyId) {
+    throw new Error("companyId is required");
+  }
+  const config = await getConfig(ctx);
+  const tenantId = requireTenantId(companyId, config);
+  const result = await fleetRequest(
+    ctx,
+    config,
+    `/api/paperclip/companies/${encodeURIComponent(tenantId)}/fleet-link-health`,
+    { companyId, query: { runtime_ref: stringField(params.runtimeRef) || stringField(params.runtime_ref) } },
+  );
+  return {
+    companyId,
+    tenantId,
+    checkedAt: new Date().toISOString(),
+    result,
+  };
+}
+
+async function previewRoutineAuthority(ctx, params = {}) {
+  const companyId = stringField(params.companyId);
+  if (!companyId) {
+    throw new Error("companyId is required");
+  }
+  const config = await getConfig(ctx);
+  const tenantId = requireTenantId(companyId, config);
+  const payload = buildRoutineAuthorityPreviewPayload({ ...params, companyId, tenantId }, config);
+  const result = await fleetRequest(
+    ctx,
+    config,
+    `/api/paperclip/companies/${encodeURIComponent(tenantId)}/routine-authority-preview`,
+    { companyId, method: "POST", body: payload },
+  );
+  await ctx.metrics.write("fleet.routine_authority_preview", 1, {
+    tenant_id: tenantId,
+    status: result?.status || "unknown",
+  });
+  return { companyId, tenantId, payload, result };
+}
+
+async function reconcileManagedRoutines(ctx, params = {}) {
+  const companyId = stringField(params.companyId);
+  if (!companyId) {
+    throw new Error("companyId is required");
+  }
+  const config = await getConfig(ctx);
+  const tenantId = requireTenantId(companyId, config);
+  const payload = buildManagedRoutineReconciliationPayload({ ...params, companyId, tenantId }, config);
+  const result = await fleetRequest(
+    ctx,
+    config,
+    `/api/paperclip/companies/${encodeURIComponent(tenantId)}/managed-routine-reconciliation`,
+    { companyId, method: "POST", body: payload },
+  );
+  await ctx.activity.log({
+    companyId,
+    message: `Reconciled Paperclip-managed routine authority for tenant ${tenantId}`,
+    metadata: {
+      plugin: PLUGIN_ID,
+      tenantId,
+      routineSetKey: payload.routine_set_key,
+      routineCount: payload.managed_routines.length,
+      status: result?.status || "unknown",
+      dryRun: payload.dry_run,
+    },
+  });
+  await ctx.metrics.write("fleet.managed_routine_reconciliation", 1, {
+    tenant_id: tenantId,
+    status: result?.status || "unknown",
+    dry_run: String(payload.dry_run),
+  });
+  return { companyId, tenantId, payload, result };
+}
+
+async function mirrorRoutineContracts(ctx, params = {}) {
+  const companyId = stringField(params.companyId);
+  if (!companyId) {
+    throw new Error("companyId is required");
+  }
+  const config = await getConfig(ctx);
+  const tenantId = requireTenantId(companyId, config);
+  const request = buildRoutineMirrorRequest({ ...params, companyId, tenantId }, config);
+
+  if (request.blocked) {
+    return guardedMutationBlockedResult(ctx, {
+      companyId,
+      tenantId,
+      actionKey: ACTION_KEYS.approvedRoutineMirror,
+      actionLabel: "routine mirror request",
+      reason: request.reason,
+    });
+  }
+
+  if (request.dryRun) {
+    const result = await fleetRequest(
+      ctx,
+      config,
+      `/api/paperclip/companies/${encodeURIComponent(tenantId)}/routine-mirror-status`,
+      { companyId, method: "POST", body: { ...request.payload, dry_run: true } },
+    );
+    await ctx.activity.log({
+      companyId,
+      message: `Ran dry-run Paperclip-to-Hermes routine mirror status for tenant ${tenantId}`,
+      metadata: {
+        plugin: PLUGIN_ID,
+        tenantId,
+        routineSetKey: request.payload.routine_set_key,
+        routineCount: request.payload.managed_routines.length,
+        status: result?.status || "unknown",
+      },
+    });
+    await ctx.metrics.write("fleet.routine_mirror", 1, {
+      tenant_id: tenantId,
+      mode: "dry_run",
+      status: result?.status || "unknown",
+    });
+    return { mode: "dry_run", companyId, tenantId, payload: request.payload, result };
+  }
+
+  const actionPayload = {
+    tenant_id: tenantId,
+    action_type: "paperclip.routine_contract_mirror",
+    tool_name: "paperclip_routine_contract_mirror",
+    risk_class: "operational_write",
+    target_environment: request.targetEnvironment,
+    idempotency_key: request.idempotencyKey || `paperclip-${companyId}-${tenantId}-routine-mirror-${Date.now()}`,
+    payload: {
+      ...request.payload,
+      dry_run: false,
+      approval_ref: request.approvalRef,
+    },
+  };
+  const result = await fleetRequest(
+    ctx,
+    config,
+    "/api/fleet-manager/actions",
+    { companyId, method: "POST", body: actionPayload },
+  );
+  await ctx.activity.log({
+    companyId,
+    message: `Requested approval-bound Paperclip-to-Hermes routine mirror for tenant ${tenantId}`,
+    metadata: {
+      plugin: PLUGIN_ID,
+      tenantId,
+      approvalRef: request.approvalRef,
+      routineSetKey: request.payload.routine_set_key,
+      routineCount: request.payload.managed_routines.length,
+      fleetManagerActionId: result?.id,
+      status: result?.status || "unknown",
+      targetEnvironment: request.targetEnvironment,
+    },
+  });
+  await ctx.metrics.write("fleet.routine_mirror", 1, {
+    tenant_id: tenantId,
+    mode: "approval_request",
+    status: result?.status || "unknown",
+  });
+  return {
+    mode: "approval_request",
+    companyId,
+    tenantId,
+    approvalRequired: true,
+    result,
+  };
+}
+
 async function syncCosts(ctx, params = {}) {
   const companyId = stringField(params.companyId);
   if (!companyId) {
@@ -953,6 +1128,11 @@ const plugin = definePlugin({
       return loadManagedResources(ctx, companyId);
     });
 
+    ctx.data.register(DATA_KEYS.ijtManagedRoutines, async (params) => {
+      const config = await getConfig(ctx);
+      return getManagedRoutineSet(params, config);
+    });
+
     ctx.actions.register(ACTION_KEYS.refreshOverview, async (params) => {
       const companyId = stringField(params.companyId);
       if (!companyId) throw new Error("companyId is required");
@@ -969,6 +1149,10 @@ const plugin = definePlugin({
     });
 
     ctx.actions.register(ACTION_KEYS.registerExisting, async (params) => registerExistingAgent(ctx, params));
+    ctx.actions.register(ACTION_KEYS.routineAuthorityPreview, async (params) => previewRoutineAuthority(ctx, params));
+    ctx.actions.register(ACTION_KEYS.managedRoutineReconciliation, async (params) => reconcileManagedRoutines(ctx, params));
+    ctx.actions.register(ACTION_KEYS.dryRunRoutineMirrorStatus, async (params) => mirrorRoutineContracts(ctx, { ...params, dryRun: true }));
+    ctx.actions.register(ACTION_KEYS.approvedRoutineMirror, async (params) => mirrorRoutineContracts(ctx, params));
     ctx.actions.register(ACTION_KEYS.repairLink, async (params) => repairAgentLink(ctx, params));
     ctx.actions.register(ACTION_KEYS.routineRepair, async (params) => repairRoutineDrift(ctx, params));
     ctx.actions.register(ACTION_KEYS.syncCosts, async (params) => syncCosts(ctx, params));
@@ -1022,11 +1206,26 @@ const plugin = definePlugin({
         body: await loadOverview(currentContext, companyId, { hours: query.hours }),
       };
     }
+    if (input.routeKey === ROUTE_KEYS.linkHealth) {
+      return { body: await loadFleetLinkHealth(currentContext, companyId, query) };
+    }
     if (BOARD_ONLY_API_ROUTES.has(input.routeKey) && input.actor?.actorType !== "user") {
       return {
         status: 403,
         body: { error: "Board access required for Fleet Connector mutation routes" },
       };
+    }
+    if (input.routeKey === ROUTE_KEYS.routineAuthorityPreview) {
+      return { body: await previewRoutineAuthority(currentContext, { ...body, companyId }) };
+    }
+    if (input.routeKey === ROUTE_KEYS.managedRoutineReconciliation) {
+      return { body: await reconcileManagedRoutines(currentContext, { ...body, companyId }) };
+    }
+    if (input.routeKey === ROUTE_KEYS.dryRunRoutineMirrorStatus) {
+      return { body: await mirrorRoutineContracts(currentContext, { ...body, companyId, dryRun: true }) };
+    }
+    if (input.routeKey === ROUTE_KEYS.approvedRoutineMirror) {
+      return { body: await mirrorRoutineContracts(currentContext, { ...body, companyId }) };
     }
     if (input.routeKey === ROUTE_KEYS.registerExisting) {
       return { status: 201, body: await registerExistingAgent(currentContext, { ...body, companyId }) };
@@ -1078,6 +1277,9 @@ const plugin = definePlugin({
     }
     if (normalized.enableRoutineRepairActions && !normalized.routineRepairRequireApprovalRef) {
       warnings.push("Routine repair actions can request apply without approval refs. Use only for trusted local smoke.");
+    }
+    if (normalized.enableRoutineMirrorActions && !normalized.routineMirrorRequireApprovalRef) {
+      warnings.push("Routine mirror actions can request apply without approval refs. Use only for trusted local smoke.");
     }
     return { ok: errors.length === 0, errors, warnings };
   },

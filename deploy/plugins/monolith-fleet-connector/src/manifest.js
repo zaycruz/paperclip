@@ -2,6 +2,7 @@ import {
   EXPORT_NAMES,
   JOB_KEYS,
   MANAGED_RESOURCE_KEYS,
+  IJT_MANAGED_ROUTINE_SET,
   PAGE_ROUTE,
   PLUGIN_ID,
   PLUGIN_VERSION,
@@ -151,6 +152,18 @@ const manifest = {
         default: true,
         description: "Requires an approval or change-request reference before creating a routine-repair proposal.",
       },
+      enableRoutineMirrorActions: {
+        type: "boolean",
+        title: "Enable Approved Routine Mirror",
+        default: false,
+        description: "Allows the connector to request Fleet Manager approval-bound mirroring of Paperclip-owned routines into Hermes contracts. Direct apply remains blocked.",
+      },
+      routineMirrorRequireApprovalRef: {
+        type: "boolean",
+        title: "Require Routine Mirror Approval Ref",
+        default: true,
+        description: "Requires an approval or change-request reference before requesting routine mirror proposals.",
+      },
       enableRegisterActions: {
         type: "boolean",
         title: "Enable Register Existing Agent Actions",
@@ -230,6 +243,46 @@ const manifest = {
       auth: "board-or-agent",
       capability: "api.routes.register",
       companyResolution: { from: "query", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.linkHealth,
+      method: "GET",
+      path: "/fleet/link-health",
+      auth: "board-or-agent",
+      capability: "api.routes.register",
+      companyResolution: { from: "query", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.routineAuthorityPreview,
+      method: "POST",
+      path: "/fleet/routine-authority-preview",
+      auth: "board",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.managedRoutineReconciliation,
+      method: "POST",
+      path: "/fleet/managed-routine-reconciliation",
+      auth: "board",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.dryRunRoutineMirrorStatus,
+      method: "POST",
+      path: "/fleet/routine-mirror-status",
+      auth: "board",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
+    },
+    {
+      routeKey: ROUTE_KEYS.approvedRoutineMirror,
+      method: "POST",
+      path: "/fleet/routine-mirror",
+      auth: "board",
+      capability: "api.routes.register",
+      companyResolution: { from: "body", key: "companyId" },
     },
     {
       routeKey: ROUTE_KEYS.registerExisting,
@@ -317,5 +370,31 @@ const manifest = {
     ],
   },
 };
+
+manifest.routines.push(
+  ...IJT_MANAGED_ROUTINE_SET.routines.map((routine) => ({
+    routineKey: routine.routineKey,
+    title: routine.title,
+    description: routine.description,
+    assigneeRef: { resourceKind: "agent", resourceKey: MANAGED_RESOURCE_KEYS.agent },
+    projectRef: { resourceKind: "project", resourceKey: MANAGED_RESOURCE_KEYS.project },
+    status: "paused",
+    priority: "high",
+    concurrencyPolicy: "coalesce_if_active",
+    catchUpPolicy: "skip_missed",
+    triggers: [],
+    issueTemplate: {
+      surfaceVisibility: "plugin_operation",
+      originId: `operation:${routine.routineKey}`,
+      billingCode: `raava:${routine.routineKey}`,
+      metadata: {
+        routineKey: routine.routineKey,
+        tenantId: IJT_MANAGED_ROUTINE_SET.tenantId,
+        role: routine.role,
+        assigneeRuntimeRef: routine.assigneeRuntimeRef,
+      },
+    },
+  })),
+);
 
 export default manifest;

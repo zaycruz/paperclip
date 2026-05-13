@@ -94,6 +94,11 @@ Instance config fields:
   apply is never called by the connector.
 - `routineRepairRequireApprovalRef`: defaults to `true`; requires an approval or
   change-request reference before creating a routine-repair proposal.
+- `enableRoutineMirrorActions`: defaults to `false`; enables approval-bound
+  Paperclip-to-Hermes routine contract mirror proposals. Direct mirror apply is
+  never called by the connector.
+- `routineMirrorRequireApprovalRef`: defaults to `true`; requires an approval or
+  change-request reference before creating a routine mirror proposal.
 - `enableRegisterActions`: defaults to `false`; enables registering an existing
   Fleet agent into Paperclip. Apply requires an approval/change-request
   reference.
@@ -127,6 +132,11 @@ Instance config fields:
 - Agent detail tab: agent/container link context and guarded repair action.
 - API routes:
   - `GET /fleet/overview?companyId=...`
+  - `GET /fleet/link-health?companyId=...`
+  - `POST /fleet/routine-authority-preview` (board-only)
+  - `POST /fleet/managed-routine-reconciliation` (board-only)
+  - `POST /fleet/routine-mirror-status` (board-only, dry-run)
+  - `POST /fleet/routine-mirror` (board-only, approval-bound proposal)
   - `POST /fleet/register-existing` (board-only)
   - `POST /fleet/repair-link` (board-only)
   - `POST /fleet/routine-repair` (board-only)
@@ -137,6 +147,13 @@ Instance config fields:
   a Monolith Fleet Operations project, and a paused Fleet governance review
   routine. These are reconciled only through the explicit action/API route; the
   scheduled poll remains read-mostly and does not auto-create operator work.
+- IJT managed routines: the manifest also declares paused IJT routine authority
+  records using stable `routineKey` values, not mutable titles:
+  `ijt-capital.coo.daily-operating-brief`,
+  `ijt-capital.coo.routine-reconciliation`, and
+  `ijt-capital.coo.fleet-link-health`. These route to the
+  `raava-ijt-capital-aurum-coo` runtime ref through Fleet/Hermes mirror
+  previews and approval-bound mirror proposals.
 - Scheduled job: `poll-fleet-links` refreshes configured company mappings every
   15 minutes.
 - Scheduled job: `scheduled-cost-sync` runs hourly. It is disabled by default
@@ -165,6 +182,11 @@ Routine repair is also governed. Dry-run calls are safe by default and write
 activity evidence; apply requests are converted into Fleet Manager
 `paperclip_routine_repair` proposals and require an approval/change-request
 reference before the connector will submit them.
+Routine mirror is governed the same way. Dry-run mirror status calls compare
+Paperclip-owned routine keys, Fleet-linked assignees, and Hermes contracts.
+Non-dry-run mirror requests are converted into Fleet Manager
+`paperclip_routine_contract_mirror` proposals and require both
+`enableRoutineMirrorActions: true` and an approval/change-request reference.
 Managed-resource reconciliation also requires a company-to-tenant mapping. It
 creates governance work inside Paperclip but leaves Fleet runtime authority in
 Monolith Fleet; lifecycle and cost mutations still require the separate action

@@ -17,7 +17,7 @@
       "isLocalPath": true
     },
     "dockerfileSnippet": [
-      "COPY packages/paperclip-fleet-connector/dist/cloud-run/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector",
+      "COPY deploy/plugins/monolith-fleet-connector/dist/cloud-run/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector",
       "RUN cd /opt/paperclip/plugins/monolith-fleet-connector && npm ci --omit=dev --ignore-scripts"
     ],
     "notes": [
@@ -29,18 +29,18 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 10146,
-      "sha256": "b6998cfb8174721f4ee9ee18581ec093360fa64f26feb384c8a2f4a4e7fe5921"
+      "bytes": 12096,
+      "sha256": "984f0227a45e55fc061fddf2966785b4fc671b694a926ee01f521a97b7a12c86"
     },
     {
       "path": "package-lock.json",
-      "bytes": 2224,
-      "sha256": "91c56a7f932cc6d9c54c170ed0f41477b66d3ed85a59fa337a373db2a271a955"
+      "bytes": 2229,
+      "sha256": "416b5dc0647a6b557901a9167188ecc3f4bd98fd6a110f1caab8f59374379b89"
     },
     {
       "path": "package.json",
-      "bytes": 1032,
-      "sha256": "08eead8cffc905ceeac948d38867fae091756ff7ba40744faca2d1f2b47ae126"
+      "bytes": 1037,
+      "sha256": "e6826d203e108f4b7ce507cd100792824c57a174f379db8cb021d485a1f5c0e0"
     },
     {
       "path": "paperclip-install-payload.json",
@@ -49,48 +49,53 @@
     },
     {
       "path": "scripts/build-cloud-run-bundle.mjs",
-      "bytes": 5619,
-      "sha256": "ac72e3cebe924e7ec174ec8d88950e41625a8fa5f05a4adb353d1b47e427739b"
+      "bytes": 5787,
+      "sha256": "536a64059387eb20053ac65d93da8c4309839da60b4a4c274e950d3288849762"
     },
     {
       "path": "scripts/verify-fleet-api-target.mjs",
-      "bytes": 3378,
-      "sha256": "95b8f82c01eebdfcae739e169958c78cf2f07687994cdc3c50c81e0a69f5845c"
+      "bytes": 3467,
+      "sha256": "e11c08f898ffd05ca0d3cf19b153dd7b7bc9ce54237d22c9749b2faaa50407f3"
     },
     {
       "path": "scripts/verify.mjs",
-      "bytes": 5845,
-      "sha256": "3feecc47e52a075a307b87c8a325ea77262ad10ba664dde1551c65d3d850e003"
+      "bytes": 9519,
+      "sha256": "d08b7d5dacde2b38d8643d70b26d844b18f023f29bc9615bd71aebc7350264de"
     },
     {
       "path": "src/constants.js",
-      "bytes": 1903,
-      "sha256": "32cfb206b5393cf264a828d481aa36478baed56218abc0ee79aaa7bfe9c0ae14"
+      "bytes": 2418,
+      "sha256": "47a53d7dabfad5f1a7ab1b7a500bb893fdf96eedf26c29654693dfda5d6e12cc"
     },
     {
       "path": "src/logic.js",
-      "bytes": 12976,
-      "sha256": "44a1b0646ca5967d6914f218d6a9e12494e266a333c685ed35f51d1c00c2aa57"
+      "bytes": 17702,
+      "sha256": "3ae664541ce56c2408b965638527cf8651a6f20dc19affe7aaa1104fe342c72e"
     },
     {
       "path": "src/manifest.js",
-      "bytes": 6606,
-      "sha256": "540705764c7c289b0b59530eda12279c8a3fac462f1aa500e266363bec9f17c9"
+      "bytes": 10688,
+      "sha256": "4005b8deb1948e606425a8d893c2c8560803eb81786e844c34114e297fa7f121"
     },
     {
       "path": "src/ui/index.js",
-      "bytes": 7791,
-      "sha256": "6025849bff72f7e1f22ee3e508121a89d23eabca2de9e302de7901b85f25b3e0"
+      "bytes": 11883,
+      "sha256": "73b1b8552240f553392bb016b8dd0568d89a15871548d5e6ad04f977ee87095a"
     },
     {
       "path": "src/worker.js",
-      "bytes": 19037,
-      "sha256": "f2c7d903ae57769b0f96a60a9297ba373a7ad09147d45ec3b19622274c07887e"
+      "bytes": 36457,
+      "sha256": "abef0da4c0bc6333ede667e4fbc0bdc2acf1ea5018d928de4d1b0e757b9773f9"
     },
     {
       "path": "tests/logic.test.mjs",
       "bytes": 6258,
       "sha256": "06c2a1a497304fd83547909cc829b3d29a935e0d08edf63d90f546631b3a3272"
+    },
+    {
+      "path": "tests/worker.test.mjs",
+      "bytes": 23616,
+      "sha256": "20eb26d282e4bb5f9013a037b5830b2c1ae053030c01e64b932033406cb0edd7"
     }
   ]
 }

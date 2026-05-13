@@ -17,7 +17,7 @@ import { WebSocket } from "ws";
 
 type SessionKeyStrategy = "fixed" | "issue" | "run";
 
-type WakePayload = {
+export type WakePayload = {
   runId: string;
   agentId: string;
   companyId: string;
@@ -361,7 +361,7 @@ function buildPaperclipEnvForWake(ctx: AdapterExecutionContext, wakePayload: Wak
   return paperclipEnv;
 }
 
-function buildWakeText(
+export function buildWakeText(
   payload: WakePayload,
   paperclipEnv: Record<string, string>,
   structuredWakePrompt: string,
@@ -373,6 +373,7 @@ function buildWakeText(
     "PAPERCLIP_COMPANY_ID",
     "PAPERCLIP_API_URL",
     "PAPERCLIP_TASK_ID",
+    "PAPERCLIP_ISSUE_WORK_MODE",
     "PAPERCLIP_WAKE_REASON",
     "PAPERCLIP_WAKE_COMMENT_ID",
     "PAPERCLIP_APPROVAL_ID",

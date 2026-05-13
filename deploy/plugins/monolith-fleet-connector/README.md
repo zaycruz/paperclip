@@ -56,7 +56,7 @@ The generated bundle contains `README.md`, `package.json`,
 and install runtime dependencies in the image build:
 
 ```Dockerfile
-COPY packages/paperclip-fleet-connector/dist/cloud-run/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector
+COPY deploy/plugins/monolith-fleet-connector/dist/cloud-run/monolith-fleet-connector /opt/paperclip/plugins/monolith-fleet-connector
 RUN cd /opt/paperclip/plugins/monolith-fleet-connector && npm ci --omit=dev --ignore-scripts
 ```
 

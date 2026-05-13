@@ -6,8 +6,13 @@ import process from "node:process";
 import manifest from "../src/manifest.js";
 
 const packageRoot = path.resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = path.resolve(packageRoot, "../../..");
 const defaultOutDir = path.join(packageRoot, "dist", "cloud-run", "monolith-fleet-connector");
 const defaultImagePath = "/opt/paperclip/plugins/monolith-fleet-connector";
+
+function toDockerPath(filePath) {
+  return filePath.split(path.sep).join(path.posix.sep);
+}
 
 function hasFlag(name) {
   return process.argv.includes(name);
@@ -99,6 +104,7 @@ async function build() {
   if (!path.isAbsolute(imagePath)) {
     throw new Error("--image-path must be an absolute in-container path");
   }
+  const dockerCopySource = toDockerPath(path.relative(repoRoot, outDir));
 
   await assertCleanOutput(outDir, hasFlag("--force"));
   await fs.mkdir(outDir, { recursive: true });
@@ -145,7 +151,7 @@ async function build() {
       installEndpoint: "POST /api/plugins/install",
       installPayload,
       dockerfileSnippet: [
-        `COPY packages/paperclip-fleet-connector/dist/cloud-run/monolith-fleet-connector ${imagePath}`,
+        `COPY ${dockerCopySource} ${imagePath}`,
         `RUN cd ${imagePath} && npm ci --omit=dev --ignore-scripts`,
       ],
       notes: [

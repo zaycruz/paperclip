@@ -259,6 +259,8 @@ export async function testEnvironment(
     args.push("--tools", "read");
     if (extraArgs.length > 0) args.push(...extraArgs);
 
+    const probeEnv = targetIsRemote ? normalizeEnv(env) : runtimeEnv;
+
     try {
       const probe = await runAdapterExecutionTargetProcess(
         runId,
@@ -267,7 +269,7 @@ export async function testEnvironment(
         args,
         {
           cwd,
-          env: runtimeEnv,
+          env: probeEnv,
           timeoutSec: 60,
           graceSec: 5,
           onLog: async () => {},

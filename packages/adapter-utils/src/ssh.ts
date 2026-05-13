@@ -28,6 +28,29 @@ export interface SshRemoteExecutionSpec extends SshConnectionConfig {
   remoteCwd: string;
 }
 
+export function buildSshCommandManagedRuntimeRemoteCommand(input: {
+  command: string;
+  args?: string[];
+  cwd: string;
+  env?: Record<string, unknown>;
+}) {
+  const envEntries = Object.entries(input.env ?? {})
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  const envPrefix = envEntries.length > 0
+    ? `env ${envEntries.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} `
+    : "";
+  const exportPrefix = envEntries.length > 0
+    ? envEntries.map(([key, value]) => `export ${key}=${shellQuote(value)};`).join(" ") + " "
+    : "";
+  const commandScript = input.command === "sh"
+    ? (input.args?.[0] === "-c" || input.args?.[0] === "-lc") && typeof input.args?.[1] === "string"
+      ? `${exportPrefix}${input.args[1]}`
+      : `${envPrefix}exec ${[shellQuote(input.command), ...(input.args ?? []).map((arg) => shellQuote(arg))].join(" ")}`
+    : `${envPrefix}exec ${[shellQuote(input.command), ...(input.args ?? []).map((arg) => shellQuote(arg))].join(" ")}`;
+
+  return `cd ${shellQuote(input.cwd)} && ${commandScript}`;
+}
+
 export function createSshCommandManagedRuntimeRunner(input: {
   spec: SshRemoteExecutionSpec;
   defaultCwd?: string | null;
@@ -45,20 +68,12 @@ export function createSshCommandManagedRuntimeRunner(input: {
       const command = commandInput.command.trim();
       const args = commandInput.args ?? [];
       const cwd = commandInput.cwd?.trim() || defaultCwd;
-      const envEntries = Object.entries(commandInput.env ?? {})
-        .filter((entry): entry is [string, string] => typeof entry[1] === "string");
-      const envPrefix = envEntries.length > 0
-        ? `env ${envEntries.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} `
-        : "";
-      const exportPrefix = envEntries.length > 0
-        ? envEntries.map(([key, value]) => `export ${key}=${shellQuote(value)};`).join(" ") + " "
-        : "";
-      const commandScript = command === "sh" || command === "bash"
-        ? (args[0] === "-c" || args[0] === "-lc") && typeof args[1] === "string"
-          ? `${exportPrefix}${args[1]}`
-          : `${envPrefix}exec ${[shellQuote(command), ...args.map((arg) => shellQuote(arg))].join(" ")}`
-        : `${envPrefix}exec ${[shellQuote(command), ...args.map((arg) => shellQuote(arg))].join(" ")}`;
-      const remoteCommand = `cd ${shellQuote(cwd)} && ${commandScript}`;
+      const remoteCommand = buildSshCommandManagedRuntimeRemoteCommand({
+        command,
+        args,
+        cwd,
+        env: commandInput.env ?? {},
+      });
 
       try {
         const result = await runSshCommand(input.spec, remoteCommand, {

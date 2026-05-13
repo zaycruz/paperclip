@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import manifest from "../src/manifest.js";
-import { MANAGED_RESOURCE_KEYS } from "../src/constants.js";
+import { IJT_MANAGED_ROUTINE_SET, MANAGED_RESOURCE_KEYS } from "../src/constants.js";
 import {
   buildBudgetAlertSignal,
   buildCostSyncPayload,
   buildFleetUrl,
   buildLifecycleActionParams,
+  buildRoutineMirrorRequest,
   buildRegisterExistingPayload,
   buildRepairPayload,
   buildRoutineRepairRequest,
@@ -45,9 +46,10 @@ assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
 for (const capability of manifest.capabilities) {
   assert.ok(supportedCapabilities.has(capability), `unexpected capability ${capability}`);
 }
-assert.equal(manifest.apiRoutes.length, 7);
+assert.equal(manifest.apiRoutes.length, 12);
 assert.ok(manifest.apiRoutes.every((route) => route.capability === "api.routes.register"));
 assert.equal(manifest.apiRoutes.find((route) => route.routeKey === "fleet-overview")?.auth, "board-or-agent");
+assert.equal(manifest.apiRoutes.find((route) => route.routeKey === "fleet-link-health")?.auth, "board-or-agent");
 assert.ok(
   manifest.apiRoutes
     .filter((route) => route.method !== "GET")
@@ -66,17 +68,26 @@ assert.equal(manifest.agents[0].status, "paused");
 assert.ok(manifest.agents[0].adapterPreference.includes("codex_local"));
 assert.deepEqual(manifest.projects.map((project) => project.projectKey), [MANAGED_RESOURCE_KEYS.project]);
 assert.equal(manifest.projects[0].settings.authorityBoundary, "Paperclip records governance; Monolith Fleet remains runtime authority.");
-assert.deepEqual(manifest.routines.map((routine) => routine.routineKey), [MANAGED_RESOURCE_KEYS.routine]);
+assert.deepEqual(manifest.routines.map((routine) => routine.routineKey), [
+  MANAGED_RESOURCE_KEYS.routine,
+  ...IJT_MANAGED_ROUTINE_SET.routines.map((routine) => routine.routineKey),
+]);
 assert.equal(manifest.routines[0].assigneeRef.resourceKey, MANAGED_RESOURCE_KEYS.agent);
 assert.equal(manifest.routines[0].projectRef.resourceKey, MANAGED_RESOURCE_KEYS.project);
 assert.equal(manifest.routines[0].status, "paused");
 assert.equal(manifest.routines[0].triggers[0].enabled, false);
 assert.equal(manifest.routines[0].issueTemplate.surfaceVisibility, "plugin_operation");
+assert.equal(
+  manifest.routines.find((routine) => routine.routineKey === "ijt-capital.coo.routine-reconciliation")?.issueTemplate.metadata.assigneeRuntimeRef,
+  "raava-ijt-capital-aurum-coo",
+);
 assert.equal(manifest.instanceConfigSchema.properties.fleetApiTokenSecretRef.format, "secret-ref");
 assert.equal(manifest.instanceConfigSchema.properties.enableBudgetAlerts.default, true);
 assert.equal(manifest.instanceConfigSchema.properties.budgetAlertUtilizationPercent.maximum, 100);
 assert.equal(manifest.instanceConfigSchema.properties.enableRoutineRepairActions.default, false);
 assert.equal(manifest.instanceConfigSchema.properties.routineRepairRequireApprovalRef.default, true);
+assert.equal(manifest.instanceConfigSchema.properties.enableRoutineMirrorActions.default, false);
+assert.equal(manifest.instanceConfigSchema.properties.routineMirrorRequireApprovalRef.default, true);
 
 const config = normalizeConfig({
   fleetApiBaseUrl: "https://fleet.example/api/",
@@ -100,6 +111,8 @@ assert.deepEqual(redactConfig(config), {
   enableRepairActions: false,
   enableRoutineRepairActions: false,
   routineRepairRequireApprovalRef: true,
+  enableRoutineMirrorActions: false,
+  routineMirrorRequireApprovalRef: true,
   enableCostSyncActions: false,
   enableLifecycleActions: true,
   lifecycleRequireApprovalRef: true,
@@ -127,6 +140,13 @@ assert.deepEqual(
     gateway_secret: "not-redacted-in-payload",
     skills: ["quality", "routine"],
   },
+);
+assert.equal(
+  buildRoutineMirrorRequest(
+    { companyId: "pc-co", apply: true, approvalRef: "RAA-463" },
+    { ...config, enableRoutineMirrorActions: true },
+  ).payload.match_key,
+  "routine_key",
 );
 assert.deepEqual(buildRepairPayload({ adapterUrl: "https://adapter", provisionJobId: "job-1" }), {
   adapter_url: "https://adapter",

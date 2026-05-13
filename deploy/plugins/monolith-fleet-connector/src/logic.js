@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from "./constants.js";
+import { DEFAULT_CONFIG, IJT_MANAGED_ROUTINE_SET } from "./constants.js";
 
 const MAX_HOURS = 720;
 
@@ -84,6 +84,14 @@ export function normalizeConfig(raw = {}) {
       source.routineRepairRequireApprovalRef,
       DEFAULT_CONFIG.routineRepairRequireApprovalRef,
     ),
+    enableRoutineMirrorActions: coerceBoolean(
+      source.enableRoutineMirrorActions,
+      DEFAULT_CONFIG.enableRoutineMirrorActions,
+    ),
+    routineMirrorRequireApprovalRef: coerceBoolean(
+      source.routineMirrorRequireApprovalRef,
+      DEFAULT_CONFIG.routineMirrorRequireApprovalRef,
+    ),
     enableCostSyncActions: coerceBoolean(
       source.enableCostSyncActions,
       DEFAULT_CONFIG.enableCostSyncActions,
@@ -130,6 +138,8 @@ export function redactConfig(rawConfig = {}) {
     enableRepairActions: config.enableRepairActions,
     enableRoutineRepairActions: config.enableRoutineRepairActions,
     routineRepairRequireApprovalRef: config.routineRepairRequireApprovalRef,
+    enableRoutineMirrorActions: config.enableRoutineMirrorActions,
+    routineMirrorRequireApprovalRef: config.routineMirrorRequireApprovalRef,
     enableCostSyncActions: config.enableCostSyncActions,
     enableLifecycleActions: config.enableLifecycleActions,
     lifecycleRequireApprovalRef: config.lifecycleRequireApprovalRef,
@@ -306,6 +316,106 @@ export function summarizeRoutineReconciliation(result = null) {
     restoreCandidates: revision.restoreCandidates,
     degradedRevisionLinks: revision.degraded,
     recommendations: Array.isArray(result.recommendations) ? result.recommendations.filter(Boolean) : [],
+  };
+}
+
+export function getManagedRoutineSet(params = {}, rawConfig = {}) {
+  const tenantId = firstString(params, "tenant_id", "tenantId") || resolveTenantId(params.companyId, rawConfig);
+  if (!tenantId || tenantId === IJT_MANAGED_ROUTINE_SET.tenantId) {
+    return IJT_MANAGED_ROUTINE_SET;
+  }
+  return {
+    setKey: `${tenantId}-managed-outcomes`,
+    companySlug: tenantId,
+    tenantId,
+    routines: [],
+  };
+}
+
+export function buildRoutineAuthorityPreviewPayload(params = {}, rawConfig = {}) {
+  const config = normalizeConfig(rawConfig);
+  const tenantId = firstString(params, "tenant_id", "tenantId") || resolveTenantId(params.companyId, config);
+  const set = getManagedRoutineSet({ ...params, tenantId }, config);
+  return {
+    tenant_id: tenantId,
+    company_id: firstString(params, "company_id", "companyId"),
+    routine_set_key: set.setKey,
+    match_key: "routine_key",
+    managed_routines: set.routines.map((routine) => ({
+      routine_key: routine.routineKey,
+      title: routine.title,
+      role: routine.role,
+      assignee_runtime_ref: routine.assigneeRuntimeRef,
+      description: routine.description,
+    })),
+  };
+}
+
+export function buildManagedRoutineReconciliationPayload(params = {}, rawConfig = {}) {
+  return {
+    ...buildRoutineAuthorityPreviewPayload(params, rawConfig),
+    dry_run: coerceBoolean(params.dry_run ?? params.dryRun, true),
+    include_hermes_contracts: coerceBoolean(params.include_hermes_contracts ?? params.includeHermesContracts, true),
+  };
+}
+
+export function buildRoutineMirrorRequest(params = {}, rawConfig = {}) {
+  const config = normalizeConfig(rawConfig);
+  const dryRun = params.apply === true
+    ? false
+    : coerceBoolean(params.dry_run ?? params.dryRun, true);
+  const approvalRef = firstString(
+    params,
+    "approval_ref",
+    "approvalRef",
+    "approval_id",
+    "approvalId",
+    "change_request_id",
+    "changeRequestId",
+  );
+  const contractsPath = firstString(params, "contracts_path", "contractsPath")
+    || "/home/agent/.hermes/routine-contracts.yaml";
+  const targetEnvironment = firstString(params, "target_environment", "targetEnvironment")
+    || (config.fleetApiBaseUrl.toLowerCase().includes("staging") ? "staging" : "production");
+  const payload = {
+    ...buildManagedRoutineReconciliationPayload(params, config),
+    contracts_path: contractsPath,
+    force: coerceBoolean(params.force, false),
+    reason: firstString(params, "reason"),
+  };
+
+  if (!dryRun && !config.enableRoutineMirrorActions) {
+    return {
+      dryRun,
+      blocked: true,
+      reason: "Routine mirror apply is disabled in plugin settings",
+      approvalRef,
+      contractsPath,
+      targetEnvironment,
+      payload,
+    };
+  }
+
+  if (!dryRun && config.routineMirrorRequireApprovalRef && !approvalRef) {
+    return {
+      dryRun,
+      blocked: true,
+      reason: "Routine mirror approvalRef or changeRequestId is required by plugin settings",
+      approvalRef,
+      contractsPath,
+      targetEnvironment,
+      payload,
+    };
+  }
+
+  return {
+    dryRun,
+    blocked: false,
+    approvalRef,
+    contractsPath,
+    targetEnvironment,
+    payload,
+    idempotencyKey: firstString(params, "idempotency_key", "idempotencyKey"),
   };
 }
 

@@ -5,6 +5,11 @@ export const STATE_NAMESPACE = "fleet-connector";
 
 export const ROUTE_KEYS = Object.freeze({
   overview: "fleet-overview",
+  linkHealth: "fleet-link-health",
+  routineAuthorityPreview: "fleet-routine-authority-preview",
+  managedRoutineReconciliation: "fleet-managed-routine-reconciliation",
+  dryRunRoutineMirrorStatus: "fleet-dry-run-routine-mirror-status",
+  approvedRoutineMirror: "fleet-approved-routine-mirror",
   registerExisting: "fleet-register-existing",
   repairLink: "fleet-repair-link",
   routineRepair: "fleet-routine-repair",
@@ -18,10 +23,15 @@ export const DATA_KEYS = Object.freeze({
   overview: "fleet-overview",
   lastOverview: "fleet-last-overview",
   managedResources: "fleet-managed-resources",
+  ijtManagedRoutines: "ijt-managed-routines",
 });
 
 export const ACTION_KEYS = Object.freeze({
   refreshOverview: "refresh-fleet-overview",
+  routineAuthorityPreview: "routine-authority-preview",
+  managedRoutineReconciliation: "managed-routine-reconciliation",
+  dryRunRoutineMirrorStatus: "dry-run-routine-mirror-status",
+  approvedRoutineMirror: "approved-routine-mirror",
   registerExisting: "register-existing-fleet-agent",
   repairLink: "repair-fleet-agent-link",
   routineRepair: "repair-fleet-routines",
@@ -60,6 +70,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   enableRepairActions: false,
   enableRoutineRepairActions: false,
   routineRepairRequireApprovalRef: true,
+  enableRoutineMirrorActions: false,
+  routineMirrorRequireApprovalRef: true,
   enableCostSyncActions: false,
   enableLifecycleActions: false,
   lifecycleRequireApprovalRef: true,
@@ -74,4 +86,33 @@ export const MANAGED_RESOURCE_KEYS = Object.freeze({
   agent: "fleet-governance-operator",
   project: "monolith-fleet-operations",
   routine: "fleet-governance-review",
+});
+
+export const IJT_MANAGED_ROUTINE_SET = Object.freeze({
+  setKey: "ijt-capital-managed-outcomes",
+  companySlug: "ijt-capital",
+  tenantId: "ijt-capital",
+  routines: Object.freeze([
+    Object.freeze({
+      routineKey: "ijt-capital.coo.daily-operating-brief",
+      title: "Daily operating brief",
+      role: "COO",
+      assigneeRuntimeRef: "raava-ijt-capital-aurum-coo",
+      description: "Prepare the daily operating brief from Paperclip-owned company state and Fleet/Hermes runtime evidence.",
+    }),
+    Object.freeze({
+      routineKey: "ijt-capital.coo.routine-reconciliation",
+      title: "Routine reconciliation",
+      role: "COO",
+      assigneeRuntimeRef: "raava-ijt-capital-aurum-coo",
+      description: "Compare Paperclip managed routine keys, Fleet-linked assignees, and Hermes routine contracts without matching on mutable titles.",
+    }),
+    Object.freeze({
+      routineKey: "ijt-capital.coo.fleet-link-health",
+      title: "Fleet link health",
+      role: "COO",
+      assigneeRuntimeRef: "raava-ijt-capital-aurum-coo",
+      description: "Check Fleet runtime identity, Hermes adapter reachability, Paperclip node linkage, and local-only cron drift.",
+    }),
+  ]),
 });

@@ -82,9 +82,11 @@ async function main() {
     ? Object.keys(openapi.json.paths)
     : [];
   const missingPaths = REQUIRED_PATHS.filter((path) => !paths.includes(path));
+  const requiredChecksOk = health.ok && ready.ok && openapi.ok;
+  const requiredPathsOk = missingPaths.length === 0;
 
   const result = {
-    status: missingPaths.length === 0 ? "ok" : "blocked",
+    status: requiredChecksOk && requiredPathsOk ? "ok" : "blocked",
     baseUrl,
     authenticated: Boolean(token),
     health: { status: health.status, ok: health.ok, durationMs: health.durationMs },
@@ -101,7 +103,7 @@ async function main() {
 
   console.log(JSON.stringify(result, null, 2));
 
-  if (missingPaths.length > 0 && !allowMissing) {
+  if (!requiredChecksOk || (!requiredPathsOk && !allowMissing)) {
     process.exit(1);
   }
 }

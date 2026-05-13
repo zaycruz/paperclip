@@ -1,3 +1,4 @@
+import "../express-actor.js";
 import { Router, type Request } from "express";
 import type { Db } from "@paperclipai/db";
 import { AGENT_ICON_NAMES } from "@paperclipai/shared";

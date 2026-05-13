@@ -459,23 +459,27 @@ function useIssueCreateErrorMock(enabled: boolean) {
   useLayoutEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
 
-    const originalFetch = window.fetch.bind(window);
-    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      const rawUrl =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      const url = new URL(rawUrl, window.location.origin);
-      if (url.pathname === `/api/companies/${COMPANY_ID}/issues` && init?.method === "POST") {
-        return Response.json(
-          { error: "Validation failed: add a reviewer before creating governed release work." },
-          { status: 422 },
-        );
-      }
-      return originalFetch(input, init);
-    };
+    const originalFetch = window.fetch;
+    const issueCreateErrorFetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const rawUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const url = new URL(rawUrl, window.location.origin);
+        if (url.pathname === `/api/companies/${COMPANY_ID}/issues` && init?.method === "POST") {
+          return Response.json(
+            { error: "Validation failed: add a reviewer before creating governed release work." },
+            { status: 422 },
+          );
+        }
+        return originalFetch.call(window, input, init);
+      },
+      originalFetch,
+    ) as typeof window.fetch;
+    window.fetch = issueCreateErrorFetch;
 
     return () => {
       window.fetch = originalFetch;

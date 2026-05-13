@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { onboard } from "../commands/onboard.js";
 import type { PaperclipConfig } from "../config/schema.js";
+import { withNoTailscaleOnPath } from "./test-helpers.js";
 
 const ORIGINAL_ENV = { ...process.env };
 const ORIGINAL_CWD = process.cwd();
@@ -172,7 +173,9 @@ describe("onboard", () => {
     const configPath = createFreshConfigPath();
     delete process.env.PAPERCLIP_TAILNET_BIND_HOST;
 
-    await onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" });
+    await withNoTailscaleOnPath(() =>
+      onboard({ config: configPath, yes: true, invokedByRun: true, bind: "tailnet" }),
+    );
 
     const raw = JSON.parse(fs.readFileSync(configPath, "utf8")) as PaperclipConfig;
     expect(raw.server.deploymentMode).toBe("authenticated");

@@ -1,4 +1,3 @@
-/// <reference path="./types/express.d.ts" />
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
@@ -921,9 +920,94 @@ function isMainModule(metaUrl: string): boolean {
   }
 }
 
+function redactConnectionStringForLog(value: string): string {
+  const redactParsedPostgresUrl = (parsed: URL): string | null => {
+    if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") return null;
+    if (parsed.password) parsed.password = "***";
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (["password", "sslpassword", "passfile", "passwd", "pwd"].includes(key.toLowerCase())) {
+        parsed.searchParams.set(key, "***");
+      }
+    }
+    return parsed.toString();
+  };
+
+  try {
+    const parsed = new URL(value);
+    const redacted = redactParsedPostgresUrl(parsed);
+    if (redacted) return redacted;
+  } catch {
+    // Fall through to redact embedded connection strings in arbitrary log text.
+  }
+
+  return value.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/g, (match) => {
+    try {
+      const parsed = new URL(match);
+      const redacted = redactParsedPostgresUrl(parsed);
+      if (redacted) return redacted;
+    } catch {
+      // Use conservative regex fallback below.
+    }
+    return match
+      .replace(/(postgres(?:ql)?:\/\/[^:\s]+:)[^@\s]+@/g, "$1***@")
+      .replace(/([?&](?:password|sslpassword|passfile|passwd|pwd)=)[^&#\s]+/gi, "$1***");
+  });
+}
+
+function redactStartupValueForLog(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (typeof value === "string") return redactConnectionStringForLog(value);
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) return "[Circular]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactStartupValueForLog(item, seen));
+  }
+
+  const record: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    record[key] = redactStartupValueForLog(entry, seen);
+  }
+  return record;
+}
+
+export function redactStartupError(err: unknown): unknown {
+  if (typeof err === "string") {
+    return {
+      type: "string",
+      message: redactConnectionStringForLog(err),
+    };
+  }
+
+  if (!(err instanceof Error)) {
+    if (err && typeof err === "object") {
+      const redacted = redactStartupValueForLog(err);
+      return {
+        type: err.constructor?.name || "object",
+        ...(redacted && typeof redacted === "object" && !Array.isArray(redacted) ? redacted : { value: redacted }),
+      };
+    }
+    return err;
+  }
+
+  const source = err as Error & Record<string, unknown>;
+  const record: Record<string, unknown> = {
+    type: err.constructor.name,
+    message: redactConnectionStringForLog(err.message),
+    stack: typeof err.stack === "string" ? redactConnectionStringForLog(err.stack) : err.stack,
+  };
+
+  for (const key of ["code", "errno", "syscall", "address", "port", "input"]) {
+    const value = source[key];
+    record[key] = typeof value === "string" ? redactConnectionStringForLog(value) : value;
+  }
+
+  return record;
+}
+
 if (isMainModule(import.meta.url)) {
   void startServer().catch((err) => {
-    logger.error({ err: sanitizeErrorForLog(err) }, "Paperclip server failed to start");
+    logger.error({ err: redactStartupError(err) }, "Paperclip server failed to start");
     process.exit(1);
   });
 }

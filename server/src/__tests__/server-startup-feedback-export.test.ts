@@ -193,7 +193,57 @@ vi.mock("../auth/better-auth.js", () => ({
   resolveBetterAuthSessionFromHeaders: vi.fn(async () => null),
 }));
 
-import { startServer } from "../index.ts";
+import { redactStartupError, startServer } from "../index.ts";
+
+describe("startup error redaction", () => {
+  it("redacts Postgres credentials from thrown strings", () => {
+    expect(redactStartupError("failed for postgres://paperclip:secret@db.example/paperclip")).toEqual({
+      type: "string",
+      message: "failed for postgres://paperclip:***@db.example/paperclip",
+    });
+  });
+
+  it("redacts Postgres credentials from plain object payloads", () => {
+    expect(
+      redactStartupError({
+        message: "failed",
+        input: "postgresql://paperclip:secret@localhost/paperclip?host=/cloudsql/project:region:instance",
+        nested: {
+          databaseUrl: "postgres://paperclip:another-secret@db.example/paperclip",
+        },
+        attempts: ["postgres://paperclip:list-secret@db.example/paperclip"],
+      }),
+    ).toEqual({
+      type: "Object",
+      message: "failed",
+      input: "postgresql://paperclip:***@localhost/paperclip?host=/cloudsql/project:region:instance",
+      nested: {
+        databaseUrl: "postgres://paperclip:***@db.example/paperclip",
+      },
+      attempts: ["postgres://paperclip:***@db.example/paperclip"],
+    });
+  });
+
+  it("redacts Postgres query-parameter secrets from startup payloads", () => {
+    const redacted = redactStartupError({
+      message: "failed for postgres://paperclip@db.example/paperclip?password=secret&sslpassword=ssl-secret",
+      connection:
+        "postgresql://paperclip@db.example/paperclip?passfile=/tmp/secret.pgpass&pwd=short-secret&sslmode=require",
+      nested: {
+        databaseUrl: "postgres://paperclip@db.example/paperclip?passwd=legacy-secret",
+      },
+    });
+
+    const serialized = JSON.stringify(redacted);
+    expect(serialized).not.toContain("secret");
+    expect(serialized).not.toContain("/tmp/secret.pgpass");
+    expect(serialized).toContain("password=***");
+    expect(serialized).toContain("sslpassword=***");
+    expect(serialized).toContain("passfile=***");
+    expect(serialized).toContain("pwd=***");
+    expect(serialized).toContain("passwd=***");
+  });
+});
 
 describe("startServer feedback export wiring", () => {
   beforeEach(() => {

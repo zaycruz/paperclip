@@ -69,14 +69,28 @@ function runVerifier(baseUrl, args = []) {
 
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const finish = (status, extraStderr = "") => {
+      if (settled) return;
+      settled = true;
+      resolve({
+        status,
+        stdout,
+        stderr: extraStderr ? `${stderr}${stderr ? "\n" : ""}${extraStderr}` : stderr,
+      });
+    };
+
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
     });
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
+    child.on("error", (error) => {
+      finish(1, error instanceof Error ? error.message : String(error));
+    });
     child.on("close", (status) => {
-      resolve({ status, stdout, stderr });
+      finish(status);
     });
   });
 }
@@ -136,6 +150,6 @@ describe("verify-fleet-api-target", () => {
     assert.equal(payload.health.ok, true);
     assert.equal(payload.ready.ok, true);
     assert.equal(payload.openapi.ok, true);
-    assert.equal(payload.openapi.missingPaths.length, REQUIRED_PATHS.length - 1);
+    assert.deepEqual(payload.openapi.missingPaths, REQUIRED_PATHS.slice(1));
   });
 });

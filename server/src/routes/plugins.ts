@@ -67,6 +67,7 @@ import {
   getActorInfo,
 } from "./authz.js";
 import { validateInstanceConfig } from "../services/plugin-config-validator.js";
+import { validatePluginConfigSecretRefs } from "../services/plugin-secrets-handler.js";
 import {
   findLocalFolderDeclaration,
   getStoredLocalFolders,
@@ -75,6 +76,7 @@ import {
   setStoredLocalFolder,
 } from "../services/plugin-local-folders.js";
 import { badRequest, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { redactSensitiveText, sanitizeLogRecord } from "../redaction.js";
 
 /** UI slot declaration extracted from plugin manifest */
 type PluginUiSlotDeclaration = NonNullable<NonNullable<PaperclipPluginManifestV1["ui"]>["slots"]>[number];
@@ -195,10 +197,9 @@ function listBundledPluginExamples(): AvailablePluginExample[] {
  * Resolve a plugin by either database ID or plugin key.
  *
  * Lookup order:
- * - UUID-like IDs: getById first, then getByKey.
- * - Scoped package keys (e.g. "@scope/name"): getByKey only, never getById.
- * - Other non-UUID IDs: try getById first (test/memory registries may allow this),
- *   then fallback to getByKey. Any UUID parse error from getById is ignored.
+ * - UUID-like IDs: getById first, then getByKey for compatibility.
+ * - Non-UUID IDs: getByKey only, never getById, because Postgres UUID casts
+ *   reject dotted plugin keys before the key lookup can run.
  *
  * @param registry - The plugin registry service instance
  * @param pluginId - Either a database UUID or plugin key (manifest id)
@@ -209,27 +210,13 @@ async function resolvePlugin(
   pluginId: string,
 ) {
   const isUuid = UUID_REGEX.test(pluginId);
-  const isScopedPackageKey = pluginId.startsWith("@") || pluginId.includes("/");
 
-  // Scoped package IDs are valid plugin keys but invalid UUIDs.
-  // Skip getById() entirely to avoid Postgres uuid parse errors.
-  if (isScopedPackageKey && !isUuid) {
+  if (!isUuid) {
     return registry.getByKey(pluginId);
   }
 
-  try {
-    const byId = await registry.getById(pluginId);
-    if (byId) return byId;
-  } catch (error) {
-    const maybeCode =
-      typeof error === "object" && error !== null && "code" in error
-        ? (error as { code?: unknown }).code
-        : undefined;
-    // Ignore invalid UUID cast errors and continue with key lookup.
-    if (maybeCode !== "22P02") {
-      throw error;
-    }
-  }
+  const byId = await registry.getById(pluginId);
+  if (byId) return byId;
 
   return registry.getByKey(pluginId);
 }
@@ -824,7 +811,7 @@ export function pluginRoutes(
       );
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
 
       // Distinguish between "worker not running" (502) and other errors (500)
       if (message.includes("not running") || message.includes("worker")) {
@@ -924,7 +911,7 @@ export function pluginRoutes(
         res.status(500).json({ error: "Plugin installed but not found in registry" });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -972,43 +959,53 @@ export function pluginRoutes(
    *
    * @see PLUGIN_SPEC.md §19.7 — Error Propagation Through The Bridge
    */
+  function sanitizeRpcDetails(details: unknown): unknown {
+    if (details && typeof details === "object" && !Array.isArray(details)) {
+      return sanitizeLogRecord(details as Record<string, unknown>);
+    }
+    if (typeof details === "string") return redactSensitiveText(details);
+    return details;
+  }
+
   function mapRpcErrorToBridgeError(err: unknown): PluginBridgeErrorResponse {
     if (err instanceof JsonRpcCallError) {
+      const message = redactSensitiveText(err.message);
+      const details = sanitizeRpcDetails(err.data);
       switch (err.code) {
         case PLUGIN_RPC_ERROR_CODES.WORKER_UNAVAILABLE:
           return {
             code: "WORKER_UNAVAILABLE",
-            message: err.message,
-            details: err.data,
+            message,
+            details,
           };
         case PLUGIN_RPC_ERROR_CODES.CAPABILITY_DENIED:
           return {
             code: "CAPABILITY_DENIED",
-            message: err.message,
-            details: err.data,
+            message,
+            details,
           };
         case PLUGIN_RPC_ERROR_CODES.TIMEOUT:
           return {
             code: "TIMEOUT",
-            message: err.message,
-            details: err.data,
+            message,
+            details,
           };
         case PLUGIN_RPC_ERROR_CODES.WORKER_ERROR:
           return {
             code: "WORKER_ERROR",
-            message: err.message,
-            details: err.data,
+            message,
+            details,
           };
         default:
           return {
             code: "UNKNOWN",
-            message: err.message,
-            details: err.data,
+            message,
+            details,
           };
       }
     }
 
-    const message = err instanceof Error ? err.message : String(err);
+    const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
 
     // Worker not running — surface as WORKER_UNAVAILABLE
     if (message.includes("not running") || message.includes("not registered")) {
@@ -1539,7 +1536,7 @@ export function pluginRoutes(
               ? 502
               : 500;
       res.status(status).json({
-        error: err instanceof Error ? err.message : String(err),
+        error: redactSensitiveText(err instanceof Error ? err.message : String(err)),
       });
     }
   });
@@ -1607,7 +1604,7 @@ export function pluginRoutes(
       publishGlobalLiveEvent({ type: "plugin.ui.updated", payload: { pluginId: plugin.id, action: "uninstalled" } });
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -1642,7 +1639,7 @@ export function pluginRoutes(
       publishGlobalLiveEvent({ type: "plugin.ui.updated", payload: { pluginId: plugin.id, action: "enabled" } });
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -1682,7 +1679,7 @@ export function pluginRoutes(
       publishGlobalLiveEvent({ type: "plugin.ui.updated", payload: { pluginId: plugin.id, action: "disabled" } });
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -1851,7 +1848,7 @@ export function pluginRoutes(
       publishGlobalLiveEvent({ type: "plugin.ui.updated", payload: { pluginId: plugin.id, action: "upgraded" } });
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -1941,6 +1938,16 @@ export function pluginRoutes(
       }
     }
 
+    const secretRefValidation = await validatePluginConfigSecretRefs({
+      db,
+      configJson: body.configJson,
+      schema,
+    });
+    if (!secretRefValidation.valid) {
+      res.status(400).json({ error: secretRefValidation.error });
+      return;
+    }
+
     try {
       const result = await registry.upsertConfig(plugin.id, {
         configJson: body.configJson,
@@ -1981,7 +1988,7 @@ export function pluginRoutes(
 
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -2133,7 +2140,7 @@ export function pluginRoutes(
       );
       res.json(jobs);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: message });
     }
   });
@@ -2179,7 +2186,7 @@ export function pluginRoutes(
       const runs = await jobDeps.jobStore.listRunsByJob(jobId, limit);
       res.json(runs);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(500).json({ error: message });
     }
   });
@@ -2221,7 +2228,7 @@ export function pluginRoutes(
       const result = await jobDeps.scheduler.triggerJob(jobId, "manual");
       res.json(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = redactSensitiveText(err instanceof Error ? err.message : String(err));
       res.status(400).json({ error: message });
     }
   });
@@ -2367,7 +2374,7 @@ export function pluginRoutes(
       // Step 8 (error): Update delivery record to failed
       const finishedAt = new Date();
       const durationMs = finishedAt.getTime() - startedAt.getTime();
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = redactSensitiveText(err instanceof Error ? err.message : String(err));
 
       await db
         .update(pluginWebhookDeliveries)

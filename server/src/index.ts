@@ -39,6 +39,7 @@ import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runt
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
 import { createStorageServiceFromConfig } from "./storage/index.js";
 import { printStartupBanner } from "./startup-banner.js";
+import { sanitizeErrorForLog, sanitizeLogRecord } from "./redaction.js";
 import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-claim.js";
 import { maybePersistWorktreeRuntimePorts } from "./worktree-config.js";
 import { initTelemetry, getTelemetryClient } from "./telemetry.js";
@@ -315,11 +316,11 @@ export async function startServer(): Promise<StartedServer> {
       const recentLogs = logBuffer.getRecentLogs();
       if (recentLogs.length > 0) {
         logger.error(
-          {
+          sanitizeLogRecord({
             phase,
             recentLogs,
             err,
-          },
+          }),
           "Embedded PostgreSQL failed; showing buffered startup logs",
         );
       }
@@ -585,7 +586,10 @@ export async function startServer(): Promise<StartedServer> {
       );
       return response;
     } catch (err) {
-      logger.error({ err, backupDir: config.databaseBackupDir, trigger }, `${label} database backup failed`);
+      logger.error(
+        sanitizeLogRecord({ err, backupDir: config.databaseBackupDir, trigger }),
+        `${label} database backup failed`,
+      );
       throw err;
     } finally {
       databaseBackupInFlight = false;
@@ -665,7 +669,7 @@ export async function startServer(): Promise<StartedServer> {
       }
     })
     .catch((err) => {
-      logger.error({ err }, "startup reconciliation of persisted runtime services failed");
+      logger.error({ err: sanitizeErrorForLog(err) }, "startup reconciliation of persisted runtime services failed");
     });
   
   if (config.heartbeatSchedulerEnabled) {
@@ -685,6 +689,7 @@ export async function startServer(): Promise<StartedServer> {
           reconciled.assignmentDispatched > 0 ||
           reconciled.dispatchRequeued > 0 ||
           reconciled.continuationRequeued > 0 ||
+          reconciled.successfulRunHandoffEscalated > 0 ||
           reconciled.escalated > 0
         ) {
           logger.warn(
@@ -712,7 +717,7 @@ export async function startServer(): Promise<StartedServer> {
         }
       })
       .catch((err) => {
-        logger.error({ err }, "startup heartbeat recovery failed");
+        logger.error({ err: sanitizeErrorForLog(err) }, "startup heartbeat recovery failed");
       });
     setInterval(() => {
       void heartbeat
@@ -723,7 +728,7 @@ export async function startServer(): Promise<StartedServer> {
           }
         })
         .catch((err) => {
-          logger.error({ err }, "heartbeat timer tick failed");
+          logger.error({ err: sanitizeErrorForLog(err) }, "heartbeat timer tick failed");
         });
 
       void routines
@@ -734,7 +739,7 @@ export async function startServer(): Promise<StartedServer> {
           }
         })
         .catch((err) => {
-          logger.error({ err }, "routine scheduler tick failed");
+          logger.error({ err: sanitizeErrorForLog(err) }, "routine scheduler tick failed");
         });
   
       // Periodically reap orphaned runs (5-min staleness threshold) and make sure
@@ -750,6 +755,7 @@ export async function startServer(): Promise<StartedServer> {
             reconciled.assignmentDispatched > 0 ||
             reconciled.dispatchRequeued > 0 ||
             reconciled.continuationRequeued > 0 ||
+            reconciled.successfulRunHandoffEscalated > 0 ||
             reconciled.escalated > 0
           ) {
             logger.warn(
@@ -777,7 +783,7 @@ export async function startServer(): Promise<StartedServer> {
           }
         })
         .catch((err) => {
-          logger.error({ err }, "periodic heartbeat recovery failed");
+          logger.error({ err: sanitizeErrorForLog(err) }, "periodic heartbeat recovery failed");
         });
     }, config.heartbeatSchedulerIntervalMs);
   }
@@ -825,7 +831,7 @@ export async function startServer(): Promise<StartedServer> {
             logger.info(`Opened browser at ${url}`);
           })
           .catch((err) => {
-            logger.warn({ err, url }, "Failed to open browser on startup");
+            logger.warn({ err: sanitizeErrorForLog(err), url }, "Failed to open browser on startup");
           });
       }
         printStartupBanner({
@@ -880,7 +886,7 @@ export async function startServer(): Promise<StartedServer> {
         try {
           await embeddedPostgres?.stop();
         } catch (err) {
-          logger.error({ err }, "Failed to stop embedded PostgreSQL cleanly");
+          logger.error({ err: sanitizeErrorForLog(err) }, "Failed to stop embedded PostgreSQL cleanly");
         }
       }
 

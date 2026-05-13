@@ -49,6 +49,7 @@ import type { PluginJobStore } from "./plugin-job-store.js";
 import type { PluginToolDispatcher } from "./plugin-tool-dispatcher.js";
 import type { PluginLifecycleManager } from "./plugin-lifecycle.js";
 import { pluginDatabaseService } from "./plugin-database.js";
+import { redactSensitiveText, sanitizeErrorForLog } from "../redaction.js";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1928,10 +1929,10 @@ export function pluginLoader(
 
       return { plugin: activePlugin, success: true, registered };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = redactSensitiveText(err instanceof Error ? err.message : String(err));
 
       log.error(
-        { pluginId, pluginKey, err: errorMessage },
+        { pluginId, pluginKey, err: sanitizeErrorForLog(err) },
         "plugin-loader: failed to activate plugin",
       );
 
@@ -1943,7 +1944,7 @@ export function pluginLoader(
         log.error(
           {
             pluginId,
-            err: markErr instanceof Error ? markErr.message : String(markErr),
+            err: sanitizeErrorForLog(markErr),
           },
           "plugin-loader: failed to mark plugin as error after activation failure",
         );

@@ -33,7 +33,7 @@
  * @see services/secrets.ts — secretService used by agent env bindings
  */
 
-import { eq, and, desc } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { companySecrets, companySecretVersions, pluginConfig } from "@paperclipai/db";
 import type { SecretProvider } from "@paperclipai/shared";
@@ -49,10 +49,12 @@ import {
 // Error helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Create a sanitised error that never leaks secret material.
- * Only the ref identifier is included; never the resolved value.
- */
+function invalidSecretRef(secretRef: string): Error {
+  const err = new Error(`Invalid secret reference: ${secretRef}`);
+  err.name = "InvalidSecretRefError";
+  return err;
+}
+
 function secretNotFound(secretRef: string): Error {
   const err = new Error(`Secret not found: ${secretRef}`);
   err.name = "SecretNotFoundError";
@@ -62,12 +64,6 @@ function secretNotFound(secretRef: string): Error {
 function secretVersionNotFound(secretRef: string): Error {
   const err = new Error(`No version found for secret: ${secretRef}`);
   err.name = "SecretVersionNotFoundError";
-  return err;
-}
-
-function invalidSecretRef(secretRef: string): Error {
-  const err = new Error(`Invalid secret reference: ${secretRef}`);
-  err.name = "InvalidSecretRefError";
   return err;
 }
 
@@ -86,8 +82,20 @@ export function extractSecretRefsFromConfig(
   configJson: unknown,
   schema?: Record<string, unknown> | null,
 ): Set<string> {
-  const refs = new Set<string>();
-  if (configJson == null || typeof configJson !== "object") return refs;
+  return new Set(extractSecretRefPathsFromConfig(configJson, schema).keys());
+}
+
+export function extractSecretRefPathsFromConfig(
+  configJson: unknown,
+  schema?: Record<string, unknown> | null,
+): Map<string, Set<string>> {
+  const refs = new Map<string, Set<string>>();
+  const addRef = (secretRef: string, path: string) => {
+    const existing = refs.get(secretRef) ?? new Set<string>();
+    existing.add(path);
+    refs.set(secretRef, existing);
+  };
+  if (configJson == null || typeof configJson !== "object") return new Map();
 
   const secretPaths = collectSecretRefPaths(schema);
 
@@ -96,7 +104,7 @@ export function extractSecretRefsFromConfig(
     for (const dotPath of secretPaths) {
       const current = readConfigValueAtPath(configJson as Record<string, unknown>, dotPath);
       if (typeof current === "string" && isUuidSecretRef(current)) {
-        refs.add(current);
+        addRef(current, dotPath);
       }
     }
     return refs;
@@ -107,7 +115,7 @@ export function extractSecretRefsFromConfig(
   // instanceConfigSchema.
   function walkAll(value: unknown): void {
     if (typeof value === "string") {
-      if (isUuidSecretRef(value)) refs.add(value);
+      if (isUuidSecretRef(value)) addRef(value, "$");
     } else if (Array.isArray(value)) {
       for (const item of value) walkAll(item);
     } else if (value !== null && typeof value === "object") {
@@ -131,6 +139,8 @@ export function extractSecretRefsFromConfig(
 export interface PluginSecretsResolveParams {
   /** The secret reference string (a secret UUID). */
   secretRef: string;
+  /** Company context for company-scoped secrets. */
+  companyId?: string | null;
 }
 
 /**
@@ -160,6 +170,81 @@ export interface PluginSecretsService {
    *   the provider fails to resolve
    */
   resolve(params: PluginSecretsResolveParams): Promise<string>;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+function readConfiguredCompanyIds(configJson: unknown): Set<string> {
+  const ids = new Set<string>();
+  const config = asRecord(configJson);
+  if (!config) return ids;
+
+  const directCompanyId = stringValue(config.companyId);
+  if (isUuidSecretRef(directCompanyId)) ids.add(directCompanyId);
+
+  const tenantMap = asRecord(config.tenantIdByCompanyId);
+  if (tenantMap) {
+    for (const companyId of Object.keys(tenantMap)) {
+      const cleanCompanyId = companyId.trim();
+      if (isUuidSecretRef(cleanCompanyId)) ids.add(cleanCompanyId);
+    }
+  }
+
+  return ids;
+}
+
+function resolveCompanyScope(paramsCompanyId: unknown, configJson: unknown): string | null {
+  const requestedCompanyId = stringValue(paramsCompanyId);
+  if (isUuidSecretRef(requestedCompanyId)) return requestedCompanyId;
+
+  const configuredCompanyIds = readConfiguredCompanyIds(configJson);
+  if (configuredCompanyIds.size === 1) {
+    return Array.from(configuredCompanyIds)[0] ?? null;
+  }
+  return null;
+}
+
+export async function validatePluginConfigSecretRefs(input: {
+  db: Db;
+  configJson: unknown;
+  schema?: Record<string, unknown> | null;
+}): Promise<{ valid: true } | { valid: false; error: string }> {
+  const refs = extractSecretRefsFromConfig(input.configJson, input.schema);
+  if (refs.size === 0) return { valid: true };
+
+  const configuredCompanyIds = readConfiguredCompanyIds(input.configJson);
+  for (const ref of refs) {
+    const secret = await input.db
+      .select()
+      .from(companySecrets)
+      .where(eq(companySecrets.id, ref))
+      .then((rows) => rows[0] ?? null);
+
+    if (!secret) {
+      return { valid: false, error: `Configured secret reference was not found: ${ref}` };
+    }
+    if (configuredCompanyIds.size === 1 && !configuredCompanyIds.has(secret.companyId)) {
+      return {
+        valid: false,
+        error: "Configured secret reference must belong to the configured company",
+      };
+    }
+    if (configuredCompanyIds.size > 1) {
+      return {
+        valid: false,
+        error: "Company-scoped secret references require a single configured company",
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 /**
@@ -212,12 +297,13 @@ export function createPluginSecretsHandler(
   const rateLimiter = createRateLimiter(30, 60_000);
 
   let cachedAllowedRefs: Set<string> | null = null;
+  let cachedConfigJson: unknown = null;
   let cachedAllowedRefsExpiry = 0;
   const CONFIG_CACHE_TTL_MS = 30_000; // 30 seconds, matches event bus TTL
 
   return {
     async resolve(params: PluginSecretsResolveParams): Promise<string> {
-      const { secretRef } = params;
+      const { secretRef, companyId } = params;
 
       // ---------------------------------------------------------------
       // 0. Rate limiting — prevent brute-force UUID enumeration
@@ -257,12 +343,20 @@ export function createPluginSecretsHandler(
 
         const schema = (plugin?.manifestJson as unknown as Record<string, unknown> | null)
           ?.instanceConfigSchema as Record<string, unknown> | undefined;
-        cachedAllowedRefs = extractSecretRefsFromConfig(configRow?.configJson, schema);
+        cachedConfigJson = configRow?.configJson ?? {};
+        cachedAllowedRefs = extractSecretRefsFromConfig(cachedConfigJson, schema);
         cachedAllowedRefsExpiry = now + CONFIG_CACHE_TTL_MS;
       }
 
       if (!cachedAllowedRefs.has(trimmedRef)) {
         // Return "not found" to avoid leaking whether the secret exists
+        throw secretNotFound(trimmedRef);
+      }
+
+      const companyScopeId = resolveCompanyScope(companyId, cachedConfigJson);
+      if (!companyScopeId) {
+        // Company secrets must be resolved in a company context. Use the same
+        // outward error as a missing ref so callers cannot probe secret scope.
         throw secretNotFound(trimmedRef);
       }
 
@@ -272,7 +366,7 @@ export function createPluginSecretsHandler(
       const secret = await db
         .select()
         .from(companySecrets)
-        .where(eq(companySecrets.id, trimmedRef))
+        .where(and(eq(companySecrets.id, trimmedRef), eq(companySecrets.companyId, companyScopeId)))
         .then((rows) => rows[0] ?? null);
 
       if (!secret) {

@@ -47,6 +47,7 @@ import { pluginLoader, type PluginLoader } from "./plugin-loader.js";
 import type { PluginWorkerManager, WorkerStartOptions } from "./plugin-worker-manager.js";
 import { badRequest, notFound } from "../errors.js";
 import { logger } from "../middleware/logger.js";
+import { sanitizeErrorForLog } from "../redaction.js";
 
 // ---------------------------------------------------------------------------
 // Lifecycle state machine
@@ -408,7 +409,7 @@ export function pluginLifecycleManager(
       emitDomain("plugin.worker_stopped", { pluginId, pluginKey });
     } catch (err) {
       log.warn(
-        { pluginId, pluginKey, err: err instanceof Error ? err.message : String(err) },
+        { pluginId, pluginKey, err: sanitizeErrorForLog(err) },
         "plugin lifecycle: failed to stop worker (best-effort)",
       );
     }

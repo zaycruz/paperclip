@@ -78,4 +78,30 @@ describe("buildWakeText", () => {
 
     expect(wakeText).toContain("PAPERCLIP_ISSUE_WORK_MODE=append-progress");
   });
+
+  it("omits issue work mode when Paperclip wake env does not provide it", () => {
+    const wakeText = buildWakeText(
+      {
+        runId: "run-123",
+        agentId: "agent-123",
+        companyId: "company-123",
+        taskId: "issue-123",
+        issueId: "issue-123",
+        issueIds: [],
+        wakeReason: "comment",
+        wakeCommentId: null,
+        approvalId: null,
+        approvalStatus: null,
+      },
+      {
+        PAPERCLIP_RUN_ID: "run-123",
+        PAPERCLIP_AGENT_ID: "agent-123",
+        PAPERCLIP_COMPANY_ID: "company-123",
+        PAPERCLIP_TASK_ID: "issue-123",
+      },
+      "",
+    );
+
+    expect(wakeText).not.toContain("PAPERCLIP_ISSUE_WORK_MODE=");
+  });
 });
